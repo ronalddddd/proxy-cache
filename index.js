@@ -5,6 +5,7 @@
     var verboseLog = (process.env.npm_config_verbose_log)? console.log : function() {},
         http = require('http'),
         httpProxy = require('http-proxy'),
+        MobileDetect = require('mobile-detect'),
         ProxyCache = function(driver, options){
             var proxyCache = this,
                 CacheObject = function(jsonString){
@@ -43,6 +44,14 @@
                 co.hits++;
             };
 
+            // Helpers
+            function getCacheKey(req) {
+                var md = new MobileDetect(req.headers['user-agent']),
+                    cacheKey = ((md.mobile())? '_mobile_' : '') + req.url;
+
+                return cacheKey;
+            }
+
             // Var init
 
             proxyCache.driver = driver;
@@ -61,14 +70,14 @@
 
             proxyCache.proxy.on('proxyRes', function(proxyRes, req, res){
                 proxyRes.on('data', function(chunk){
-                    var co = proxyCache.urlCache[req.url];
+                    var co = proxyCache.urlCache[getCacheKey(req)];
                     if(co){
                         co.appendData(chunk);
                     }
                 });
                 proxyRes.on('end', function(){
                     verboseLog("Proxy Response ended for request %s", req.url);
-                    var co = proxyCache.urlCache[req.url];
+                    var co = proxyCache.urlCache[getCacheKey(req)];
                     if(co){
                         verboseLog("Caching Response code:", proxyRes.statusCode);
                         co.setStatusCode(proxyRes.statusCode);
@@ -77,12 +86,12 @@
                         // Set external cache
                         if(proxyCache.driver.setCache){
                             verboseLog("Saving cache object to driver storage...");
-                            proxyCache.driver.setCache(req.url, co)
+                            proxyCache.driver.setCache(getCacheKey(req), co)
                                 .then(function(res){
-                                    console.log("Externally cached: %s", req.url);
+                                    console.log("Externally cached: %s", getCacheKey(req));
                                 });
                         }
-                        console.log("Cached: %s", req.url);
+                        console.log("Cached: %s", getCacheKey(req));
                     }
                 });
             });
@@ -102,8 +111,9 @@
             proxyCache.server = http.createServer(function (req, res) {
                 verboseLog("IN: %s", req.url);
                 verboseLog("Client Request headers:", req.headers);
-                var co = proxyCache.urlCache[req.url],
+                var co = proxyCache.urlCache[getCacheKey(req)],
                     shouldCache = ( !proxyCache.ignoreRegex || !proxyCache.ignoreRegex.test(req.url));
+
 
                 if (!shouldCache) {
                 // Skip Cache
@@ -112,30 +122,30 @@
                 } else if ( co && co.headers && !/^image\//.test(co.headers["content-type"]) ) { // TODO: how to properly cache images and binary data?
                 // Cache hit
                     co.countHit();
-                    console.log("HIT: (%s times) %s",co.hits, req.url);
+                    console.log("HIT: (%s times) %s",co.hits, getCacheKey(req));
                     proxyCache.resEndCached(req, res, co);
                 } else {
                 // Cache miss -- check external cache if available, if not, make proxy request.
-                    console.log("MISS: %s", req.url);
+                    console.log("MISS: %s", getCacheKey(req));
                     if (shouldCache){
                         // Try to find external cache
                         if(driver.getCache){
-                            driver.getCache(req.url)
+                            driver.getCache(getCacheKey(req))
                                 .then(function(serializedCo){
                                     if(serializedCo){
                                         // Cache found in external cache
-                                        console.log("HIT (external): %s", req.url);
-                                        var co = proxyCache.urlCache[req.url] = new CacheObject(serializedCo);
+                                        console.log("HIT (external): %s", getCacheKey(req));
+                                        var co = proxyCache.urlCache[getCacheKey(req)] = new CacheObject(serializedCo);
                                         proxyCache.resEndCached(req, res, co);
                                     } else {
                                         // Cache not found in external cache
-                                        proxyCache.urlCache[req.url] = new CacheObject(serializedCo);
+                                        proxyCache.urlCache[getCacheKey(req)] = new CacheObject(serializedCo);
                                         proxyCache.resEndProxied(req, res);
                                     }
                                 });
                         } else {
                         // No external cache source
-                            proxyCache.urlCache[req.url] = new CacheObject();
+                            proxyCache.urlCache[getCacheKey(req)] = new CacheObject();
                             proxyCache.resEndProxied(req, res);
                         }
                     }

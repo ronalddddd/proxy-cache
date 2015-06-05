@@ -7,6 +7,11 @@ indicating when the next publish will happen and hence invalidate existing cache
 
 The default driver also implements the external cache storage interfaces and stores cached data in the "ProxyCache" collection.
 
+# Install
+
+    npm install rn-proxy-cache
+
+
 # Usage
 
 ## Running as a server directly

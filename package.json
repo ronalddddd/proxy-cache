@@ -1,7 +1,6 @@
 {
-  "private": true,
-  "name": "proxy-cache",
-  "version": "0.1.0",
+  "name": "rn-proxy-cache",
+  "version": "0.1.1",
   "description": "A simple proxy cache with an extensible driver interface for stale-cache checking and external cache storage. Comes with a mongodb driver by default.",
   "main": "index.js",
   "scripts": {
@@ -13,6 +12,11 @@
   "dependencies": {
     "bluebird": "^2.9.27",
     "http-proxy": "^1.11.1",
+    "mobile-detect": "^1.2.0",
     "mongodb": "^2.0.33"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ronalddddd/proxy-cache"
   }
 }
