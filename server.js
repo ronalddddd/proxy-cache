@@ -5,25 +5,26 @@ var ProxyCache = require('./index.js'),
 
 var driver = new Driver(),
     proxyCache,
-    watchInterval;
+    watchInterval = (process.env.npm_config_watch_interval)? parseInt(process.env.npm_config_watch_interval) : 30000,
+    watcher;
 
 function StopWatching() {
-    if (watchInterval){
-        clearInterval(watchInterval);
+    if (watcher){
+        clearInterval(watcher);
         console.log("Stopped watching publish schedule.");
     }
 }
 
 function StartWatching(){
     console.log("Start watching publish schedule.");
-    watchInterval = setInterval(function(){
+    watcher = setInterval(function(){
         driver.checkIfStale()
             .then(function(isStale){
                 if (isStale){
                     proxyCache.clearAll();
                 }
             });
-    }, 5000);
+    }, watchInterval);
 }
 
 // MAIN

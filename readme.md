@@ -16,7 +16,8 @@ indicating when the next publish will happen and hence invalidate existing cache
     --proxy-port=8080 \
     --ignore-regex="^\/assets" \
     --mongodb-url="mongodb://localhost:27017/test" \
-    --use-external-cache
+    --use-external-cache \
+    --watch-interval=5000 \
     --mem-usage \
     --verbose-log
 
@@ -27,6 +28,7 @@ indicating when the next publish will happen and hence invalidate existing cache
 - `--mongodb-url`: The default driver uses mongodb, so this is the mongodb url connection string.
 - `--ignore-regex`: Regular expression of a URL pattern to bypass cache.
 - `--use-external-cache`: Enables storing cached objects in the external storage interface provided by the driver, useful if you run multiple instances of the proxy.
+- `--watch-interval`: How long between each stale-cache check.
 - `--mem-usage`: Shows memory usage info every 30sec.
 - `--verbose-log`: Verbose logging for debugging.
 
