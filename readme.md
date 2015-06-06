@@ -44,4 +44,6 @@ The default adapter also implements the external cache storage interfaces and st
 - Add feature to cleanup cache objects after a set memory threshold
 - Add feature to allow request pooling
 - Add feature to serve stale cache while making new proxy request to update cache
+- Add feature to regenerate cache (precache), generating the ones with the most cache hits first
+- Add a basic TTL cache adapter
 - Enable library usage and create API
