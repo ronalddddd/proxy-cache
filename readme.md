@@ -37,14 +37,11 @@ The default adapter also implements the external cache storage interfaces and st
 - `--mem-usage`: Shows memory usage info every 30sec.
 - `--verbose-log`: Verbose logging for debugging.
 
-## Using it as a library
-
-Coming soon.
-
 # TODO
 
 - Change naive implementation of response caching -- how to cache images and binary data properly?
-- Tests
+- Write tests
 - Add feature to cleanup cache objects after a set memory threshold
-- Enable library usage and create API
 - Add feature to allow request pooling
+- Add feature to serve stale cache while making new proxy request to update cache
+- Enable library usage and create API
