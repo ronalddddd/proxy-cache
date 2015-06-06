@@ -1,11 +1,11 @@
 # Proxy Cache
 
-A simple proxy cache with an extensible driver interface for stale-cache checking and external cache storage. Comes with a mongodb driver by default.
+A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a MongoDB adapter by default.
 
-The default driver implements the `checkIfStale()` method by checking a "PublishSchedule" collection in mongodb that stores a "publish_date" field
-indicating when the next publish will happen and hence invalidate existing cache.
+The default adapter implements the `checkIfStale()` method by checking a "PublishSchedule" collection in mongodb that stores a "publish_date" field
+indicating when the next publish will happen and hence invalidate existing cache. The method should return a promise that resolves to a boolean value indicating if the cache should be considered stale.
 
-The default driver also implements the external cache storage interfaces and stores cached data in the "ProxyCache" collection.
+The default adapter also implements the external cache storage interfaces and stores cached data in the "ProxyCache" collection. The methods implemented are `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
 
 # Install
 
