@@ -1,7 +1,7 @@
 {
   "name": "rn-proxy-cache",
-  "version": "0.1.1",
-  "description": "A simple proxy cache with an extensible driver interface for stale-cache checking and external cache storage. Comes with a mongodb driver by default.",
+  "version": "0.2.0",
+  "description": "A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a MongoDB adapter by default.",
   "main": "index.js",
   "scripts": {
     "test": "mocha",
