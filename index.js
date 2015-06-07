@@ -5,21 +5,74 @@
     var verboseLog = (process.env.npm_config_verbose_log)? console.log : function() {},
         http = require('http'),
         httpProxy = require('http-proxy'),
+        stream = require("stream"),
         MobileDetect = require('mobile-detect'),
+        Promise = require('bluebird'),
         ProxyCache = function(adapter, options){
             var proxyCache = this,
-                CacheObject = function(jsonString){
+                /**
+                 * Cache Object to store proxy response
+                 *
+                 * @param cacheKey
+                 * @param input The input can be either a serialized CachedObject or a http.ServerResponse
+                 * @returns {ProxyCache.CacheObject}
+                 * @constructor
+                 */
+                CacheObject = function(cacheKey, input){
                     var co = this,
-                        deserialized = (jsonString)? JSON.parse(jsonString) : {};
-                    verboseLog("Deserialized cache object: ", deserialized);
+                        res = (input instanceof stream.Readable)? input : null,
+                        jsonString = (typeof input ===  'string')? input : null,
+                        deserialized = (jsonString)? JSON.parse(jsonString) : {},
+                        d = Promise.defer();
+
+                    co.cacheKey = cacheKey;
                     co.dateISOString = deserialized.dateISOString || new Date().toISOString();
                     co.statusCode = deserialized.statusCode || undefined;
                     co.headers = deserialized.headers || null;
                     co.data = (deserialized.data)? new Buffer(deserialized.data, 'base64') : null;
                     co.buffers = [];
                     co.hits = 0;
+                    co.ready = d.promise;
+                    co.res = res;
 
-                    //if(deserialized) console.log(co);
+                    // If input is a http.ServerResponse, we create and cache the data when the response finishes
+                    if (res){
+                        verboseLog("Creating new cache object from http.ServerResponse stream.");
+                        // Data available from proxy response -- save it
+                        res.on('data', function(chunk){
+                            co.appendChunk(chunk);
+                        });
+                        // Proxy response ended -- save the response status, headers and concat the data buffers collected above
+                        res.on('end', function(){
+                            verboseLog("Response ended for cache key %s", cacheKey);
+                            verboseLog("Caching Response code:", res.statusCode);
+                            co.setStatusCode(res.statusCode);
+                            verboseLog("Caching Response headers:", res.headers);
+                            co.setHeaders(res.headers);
+                            // Concat buffers
+                            co.data = Buffer.concat(co.buffers);
+                            // Set external cache
+                            if(proxyCache.adapter.setCache){
+                                verboseLog("Saving cache object to adapter storage...");
+                                proxyCache.adapter.setCache(cacheKey, co)
+                                    .then(function(res){
+                                        console.log("Externally cached: %s", cacheKey);
+                                        d.resolve(co);
+                                    });
+                            } else {
+                                d.resolve(co);
+                            }
+                        });
+                    } else if (jsonString) {
+                        verboseLog("Creating new cache object from serialized cache...");
+                        d.resolve(co);
+                    } else {
+                        d.reject(new Error("CacheObject must be created from a http.ServerResponse or a serialized CacheObject instance."));
+                    }
+
+                    co.ready.then(function(res){
+                        verboseLog("[%s] Cache object ready", cacheKey);
+                    });
 
                     return co;
                 };
@@ -74,51 +127,32 @@
 
             proxyCache.proxyTarget = options.targetHost || "localhost:80";
             proxyCache.ignoreRegex = (options.ignoreRegex)?
-                    new RegExp(options.ignoreRegex) : undefined;
+                new RegExp(options.ignoreRegex) : undefined;
             proxyCache.proxy = httpProxy.createProxyServer({ // Creates the proxy server
                 hostRewrite: false // true
             });
 
-            proxyCache.urlCache = {};
+            proxyCache.cacheCollection = {};
 
             // Proxy Event Listeners
 
             proxyCache.proxy.on('proxyRes', function(proxyRes, req, res){
+                var shouldCache = ( // Conditions of when to apply cache
+                ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) ) || // Case when URL Should be ignored
+                ( ! (proxyRes.statusCode > 200) ) ); // Case when upstream response is not 200
+
                 // Ignore Status Codes > 200
                 if(proxyRes.statusCode > 200){
-                    console.log("Proxy Response Status Code (%s) > 200, cancel caching for this key (%s)", proxyRes.statusCode, getCacheKey(req));
-                    delete proxyCache.urlCache[getCacheKey(req)];
-                    return;
+                    console.log("[%s] Proxy Response Status Code (%s) > 200, won't cache.", getCacheKey(req), proxyRes.statusCode);
+                } else {
+                    // Create the cache object
+                    new CacheObject(getCacheKey(req), proxyRes)
+                        .ready
+                        .then(function(co){
+                            proxyCache.cacheCollection[co.cacheKey] = co;
+                            console.log("Cached %s", co.cacheKey)
+                        });
                 }
-                // Data available from proxy response stream -- save it
-                proxyRes.on('data', function(chunk){
-                    var co = proxyCache.urlCache[getCacheKey(req)];
-                    if(co){
-                        co.appendChunk(chunk);
-                    }
-                });
-                // Proxy response ended -- save the response status, headers and concat the data buffers collected above
-                proxyRes.on('end', function(){
-                    verboseLog("Proxy Response ended for request %s", req.url);
-                    var co = proxyCache.urlCache[getCacheKey(req)];
-                    if(co){
-                        verboseLog("Caching Response code:", proxyRes.statusCode);
-                        co.setStatusCode(proxyRes.statusCode);
-                        verboseLog("Caching Response headers:", proxyRes.headers);
-                        co.setHeaders(proxyRes.headers);
-                        // Concat buffers
-                        co.data = Buffer.concat(co.buffers);
-                        // Set external cache
-                        if(proxyCache.adapter.setCache){
-                            verboseLog("Saving cache object to adapter storage...");
-                            proxyCache.adapter.setCache(getCacheKey(req), co)
-                                .then(function(res){
-                                    console.log("Externally cached: %s", getCacheKey(req));
-                                });
-                        }
-                        console.log("Cached: %s", getCacheKey(req));
-                    }
-                });
             });
 
             proxyCache.proxy.on('error', function (err, req, res) {
@@ -136,43 +170,35 @@
             proxyCache.server = http.createServer(function (req, res) {
                 verboseLog("IN: %s", req.url);
                 verboseLog("Client Request headers:", req.headers);
-                var co = proxyCache.urlCache[getCacheKey(req)],
-                    shouldCache = ( !proxyCache.ignoreRegex || !proxyCache.ignoreRegex.test(req.url));
+                var co = proxyCache.cacheCollection[getCacheKey(req)],
+                    shouldCache = ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) );
 
-
-                if (!shouldCache) {
-                // Skip Cache
-                    console.log("SKIP CACHE: %s", req.url);
-                    proxyCache.resEndProxied(req, res);
-                } else if ( co && co.headers ) {
-                // Cache hit
+                if ( co ) {
+                    // Cache hit
                     co.countHit();
-                    console.log("HIT: (%s times) %s",co.hits, getCacheKey(req));
                     proxyCache.resEndCached(req, res, co);
+                    console.log("HIT: (%s times) %s",co.hits, co.cacheKey);
                 } else {
-                // Cache miss -- check external cache if available, if not, make proxy request.
+                    // Cache miss -- check external cache
                     console.log("MISS: %s", getCacheKey(req));
-                    if (shouldCache){
-                        // Try to find external cache
-                        if(adapter.getCache){
-                            adapter.getCache(getCacheKey(req))
-                                .then(function(serializedCo){
-                                    if(serializedCo){
-                                        // Cache found in external cache
-                                        console.log("HIT (external): %s", getCacheKey(req));
-                                        var co = proxyCache.urlCache[getCacheKey(req)] = new CacheObject(serializedCo);
-                                        proxyCache.resEndCached(req, res, co);
-                                    } else {
-                                        // Cache not found in external cache
-                                        proxyCache.urlCache[getCacheKey(req)] = new CacheObject();
-                                        proxyCache.resEndProxied(req, res);
-                                    }
-                                });
-                        } else {
-                        // No external cache source
-                            proxyCache.urlCache[getCacheKey(req)] = new CacheObject();
-                            proxyCache.resEndProxied(req, res);
-                        }
+                    // Try to find external cache
+                    if(adapter.getCache && shouldCache){
+                        adapter.getCache(getCacheKey(req))
+                            .then(function(serializedCo){
+                                if(serializedCo){
+                                    // Cache found in external cache
+                                    console.log("HIT (external): %s", getCacheKey(req));
+                                    // Create cache object from serialized data
+                                    var co = proxyCache.cacheCollection[getCacheKey(req)] = new CacheObject(getCacheKey(req), serializedCo);
+                                    proxyCache.resEndCached(req, res, co);
+                                } else {
+                                    // Cache not found in external cache
+                                    proxyCache.resEndProxied(req, res);
+                                }
+                            });
+                    } else {
+                        // No external cache adapter
+                        proxyCache.resEndProxied(req, res);
                     }
                 }
             }).listen(options.proxyPort || 8181);
@@ -180,9 +206,9 @@
             proxyCache.clearAll = function(){
                 console.log("Clearing memory cache...");
                 var deleteCount = 0;
-                for (var k in proxyCache.urlCache){
+                for (var k in proxyCache.cacheCollection){
                     verboseLog("Deleting %s", k);
-                    delete proxyCache.urlCache[k];
+                    delete proxyCache.cacheCollection[k];
                     deleteCount++;
                 }
                 console.log("Deleted %s memory cache objects.",deleteCount);
