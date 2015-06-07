@@ -1,11 +1,7 @@
 # Proxy Cache
 
-A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a MongoDB adapter by default.
+A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a MongoDB adapter.
 
-The default adapter implements the `checkIfStale()` method by checking a "PublishSchedule" collection in mongodb that stores a "publish_date" field
-indicating when the next publish will happen and hence invalidate existing cache. The method should return a promise that resolves to a boolean value indicating if the cache should be considered stale.
-
-The default adapter also implements the external cache storage interfaces and stores cached data in the "ProxyCache" collection. The methods implemented are `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
 
 # Install
 
@@ -14,7 +10,14 @@ The default adapter also implements the external cache storage interfaces and st
 
 # Usage
 
-## Running as a server directly
+## Simple TTL Caching
+
+    npm start \
+    --target-host="www.google.com:80" \
+    --proxy-port=8080 \
+    --ttl=30000
+
+## Using the built-in MongoDB adapter with some more optional settings
 
     npm start \
     --target-host="localhost:8081" \
@@ -26,24 +29,37 @@ The default adapter also implements the external cache storage interfaces and st
     --mem-usage \
     --verbose-log
 
-## Options
+## Required Settings
 
 - `--target-host`: The host and port you're proxying to.
 - `--proxy-port`: The port this proxy will serve on.
-- `--mongodb-url`: The default driver uses mongodb, so this is the mongodb url connection string.
+
+## Optional Settings
+
 - `--ignore-regex`: Regular expression of a URL pattern to bypass cache.
-- `--use-external-cache`: Enables storing cached objects in the external storage interface provided by the driver, useful if you run multiple instances of the proxy.
-- `--watch-interval`: How long between each stale-cache check.
+- `ttl`: TTL caching in milliseconds
+- `--mongodb-url`: Supply this to use the MongoDB adapter
+- `--use-external-cache`: Enables storing cached objects in the external storage interface provided by the adapter, useful if you run multiple instances of the proxy.
+- `--watch-interval`: How long between each stale-cache check. Defaults to 30sec.
 - `--mem-usage`: Shows memory usage info every 30sec.
 - `--verbose-log`: Verbose logging for debugging.
 
+# MongoDB Adapter
+
+The MongoDB adapter implements the `checkIfStale()` method by checking a "PublishSchedule" collection in mongodb that stores a "publish_date" field
+indicating when the next publish will happen and hence invalidate existing cache. The method should return a promise that resolves to a boolean value indicating if the cache should be considered stale.
+
+The MongoDB adapter also implements the external cache storage interfaces and stores cached data in the "ProxyCache" collection.
+The methods implemented are `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
+Use the `--use-external-cache` option to enable it.
+
 # TODO
 
-- Change naive implementation of response caching -- how to cache images and binary data properly?
+- DONE - Change naive implementation of response caching -- how to cache images and binary data properly?
 - Write tests
 - Add feature to cleanup cache objects after a set memory threshold
 - Add feature to allow request pooling
 - Add feature to serve stale cache while making new proxy request to update cache
 - Add feature to regenerate cache (precache), generating the ones with the most cache hits first
-- Add a basic TTL cache adapter
+- DONE - Add a basic TTL cache adapter
 - Enable library usage and create API

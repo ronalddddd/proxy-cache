@@ -12,8 +12,10 @@
                     var co = this,
                         deserialized = (jsonString)? JSON.parse(jsonString) : {};
                     verboseLog("Deserialized cache object: ", deserialized);
+                    co.dateISOString = deserialized.dateISOString || new Date().toISOString();
                     co.headers = deserialized.headers || null;
-                    co.data = deserialized.data || "";
+                    co.data = deserialized.data || null;
+                    co.buffers = [];
                     co.statusCode = deserialized.statusCode || undefined;
                     co.hits = 0;
 
@@ -24,9 +26,9 @@
 
             // Cache Object Prototypes
 
-            CacheObject.prototype.appendData = function(data) {
+            CacheObject.prototype.appendChunk = function(chunk) {
                 var co = this;
-                co.data += data;
+                co.buffers.push(chunk);
             };
 
             CacheObject.prototype.setHeaders = function(headers) {
@@ -61,7 +63,7 @@
             proxyCache.ignoreRegex = (options.ignoreRegex)?
                     new RegExp(options.ignoreRegex) : undefined;
             proxyCache.proxy = httpProxy.createProxyServer({ // Creates the proxy server
-                hostRewrite: true
+                hostRewrite: false // true
             });
 
             proxyCache.urlCache = {};
@@ -69,12 +71,14 @@
             // Proxy Event Listeners
 
             proxyCache.proxy.on('proxyRes', function(proxyRes, req, res){
+                // Data available from proxy response stream -- save it
                 proxyRes.on('data', function(chunk){
                     var co = proxyCache.urlCache[getCacheKey(req)];
                     if(co){
-                        co.appendData(chunk);
+                        co.appendChunk(chunk);
                     }
                 });
+                // Proxy response ended -- save the response status, headers and concat the data buffers collected above
                 proxyRes.on('end', function(){
                     verboseLog("Proxy Response ended for request %s", req.url);
                     var co = proxyCache.urlCache[getCacheKey(req)];
@@ -83,9 +87,11 @@
                         co.setStatusCode(proxyRes.statusCode);
                         verboseLog("Caching Response headers:", proxyRes.headers);
                         co.setHeaders(proxyRes.headers);
+                        // Concat buffers
+                        co.data = Buffer.concat(co.buffers);
                         // Set external cache
                         if(proxyCache.driver.setCache){
-                            verboseLog("Saving cache object to driver storage...");
+                            verboseLog("Saving cache object to adapter storage...");
                             proxyCache.driver.setCache(getCacheKey(req), co)
                                 .then(function(res){
                                     console.log("Externally cached: %s", getCacheKey(req));
@@ -119,7 +125,7 @@
                 // Skip Cache
                     console.log("SKIP CACHE: %s", req.url);
                     proxyCache.resEndProxied(req, res);
-                } else if ( co && co.headers && !/^image\//.test(co.headers["content-type"]) ) { // TODO: how to properly cache images and binary data?
+                } else if ( co && co.headers ) {
                 // Cache hit
                     co.countHit();
                     console.log("HIT: (%s times) %s",co.hits, getCacheKey(req));
@@ -184,7 +190,8 @@
             res.setHeader(headerKey, co.headers[headerKey]);
         }
         res.statusCode = co.statusCode || 500;
-        res.setHeader("X-Cache-Hit", "true");
+        res.setHeader("X-Cache-Date", co.dateISOString);
+        res.setHeader("X-Cache-Hits", co.hits);
 
         res.end(co.data);
     };
