@@ -6,17 +6,17 @@
         http = require('http'),
         httpProxy = require('http-proxy'),
         MobileDetect = require('mobile-detect'),
-        ProxyCache = function(driver, options){
+        ProxyCache = function(adapter, options){
             var proxyCache = this,
                 CacheObject = function(jsonString){
                     var co = this,
                         deserialized = (jsonString)? JSON.parse(jsonString) : {};
                     verboseLog("Deserialized cache object: ", deserialized);
                     co.dateISOString = deserialized.dateISOString || new Date().toISOString();
-                    co.headers = deserialized.headers || null;
-                    co.data = deserialized.data || null;
-                    co.buffers = [];
                     co.statusCode = deserialized.statusCode || undefined;
+                    co.headers = deserialized.headers || null;
+                    co.data = (deserialized.data)? new Buffer(deserialized.data, 'base64') : null;
+                    co.buffers = [];
                     co.hits = 0;
 
                     //if(deserialized) console.log(co);
@@ -25,6 +25,19 @@
                 };
 
             // Cache Object Prototypes
+
+            CacheObject.prototype.toJSON = function() {
+                var co = this,
+                    serializedData = co.data.toString('base64'), // base64 encode buffer data
+                    jsonObject = {
+                        dateISOString: co.dateISOString,
+                        statusCode: co.statusCode,
+                        headers: co.headers,
+                        data: serializedData // this is why we need the custom toJSON implementation
+                    };
+
+                return JSON.stringify(jsonObject);
+            };
 
             CacheObject.prototype.appendChunk = function(chunk) {
                 var co = this;
@@ -56,7 +69,7 @@
 
             // Var init
 
-            proxyCache.driver = driver;
+            proxyCache.adapter = adapter;
             proxyCache.options = options || {};
 
             proxyCache.proxyTarget = options.targetHost || "localhost:80";
@@ -71,6 +84,12 @@
             // Proxy Event Listeners
 
             proxyCache.proxy.on('proxyRes', function(proxyRes, req, res){
+                // Ignore Status Codes > 200
+                if(proxyRes.statusCode > 200){
+                    console.log("Proxy Response Status Code (%s) > 200, cancel caching for this key (%s)", proxyRes.statusCode, getCacheKey(req));
+                    delete proxyCache.urlCache[getCacheKey(req)];
+                    return;
+                }
                 // Data available from proxy response stream -- save it
                 proxyRes.on('data', function(chunk){
                     var co = proxyCache.urlCache[getCacheKey(req)];
@@ -90,9 +109,9 @@
                         // Concat buffers
                         co.data = Buffer.concat(co.buffers);
                         // Set external cache
-                        if(proxyCache.driver.setCache){
+                        if(proxyCache.adapter.setCache){
                             verboseLog("Saving cache object to adapter storage...");
-                            proxyCache.driver.setCache(getCacheKey(req), co)
+                            proxyCache.adapter.setCache(getCacheKey(req), co)
                                 .then(function(res){
                                     console.log("Externally cached: %s", getCacheKey(req));
                                 });
@@ -135,8 +154,8 @@
                     console.log("MISS: %s", getCacheKey(req));
                     if (shouldCache){
                         // Try to find external cache
-                        if(driver.getCache){
-                            driver.getCache(getCacheKey(req))
+                        if(adapter.getCache){
+                            adapter.getCache(getCacheKey(req))
                                 .then(function(serializedCo){
                                     if(serializedCo){
                                         // Cache found in external cache
@@ -145,7 +164,7 @@
                                         proxyCache.resEndCached(req, res, co);
                                     } else {
                                         // Cache not found in external cache
-                                        proxyCache.urlCache[getCacheKey(req)] = new CacheObject(serializedCo);
+                                        proxyCache.urlCache[getCacheKey(req)] = new CacheObject();
                                         proxyCache.resEndProxied(req, res);
                                     }
                                 });
@@ -169,9 +188,9 @@
                 console.log("Deleted %s memory cache objects.",deleteCount);
 
                 // Delete external cache
-                if (proxyCache.driver.clearCache){
+                if (proxyCache.adapter.clearCache){
                     console.log("Clearing external cache...");
-                    proxyCache.driver.clearCache();
+                    proxyCache.adapter.clearCache();
                 }
             };
 

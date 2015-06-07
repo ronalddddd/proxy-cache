@@ -33,6 +33,7 @@ function StartWatching(){
 console.log("Using adapter %s",selectedAdapter);
 adapter.ready.then(function(){
     console.log("Adapter is ready.");
+    console.log("Creating proxy to %s",process.env.npm_config_target_host);
     proxyCache = new ProxyCache(adapter, {
         targetHost: process.env.npm_config_target_host || "localhost",
         ignoreRegex: process.env.npm_config_ignore_regex || undefined,

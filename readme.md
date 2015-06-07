@@ -1,6 +1,6 @@
 # Proxy Cache
 
-A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a MongoDB adapter.
+A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a TTL adapter and a MongoDB adapter.
 
 
 # Install
@@ -17,7 +17,7 @@ A simple proxy cache with an adapter interface for stale-cache checking and exte
     --proxy-port=8080 \
     --ttl=30000
 
-## Using the built-in MongoDB adapter with some more optional settings
+## Using the built-in MongoDB adapter with some additional settings
 
     npm start \
     --target-host="localhost:8081" \
@@ -37,8 +37,8 @@ A simple proxy cache with an adapter interface for stale-cache checking and exte
 ## Optional Settings
 
 - `--ignore-regex`: Regular expression of a URL pattern to bypass cache.
-- `ttl`: TTL caching in milliseconds
-- `--mongodb-url`: Supply this to use the MongoDB adapter
+- `--ttl`: TTL caching in milliseconds, defaults to 600000ms (10 minutes).
+- `--mongodb-url`: Supply this to use the MongoDB adapter.
 - `--use-external-cache`: Enables storing cached objects in the external storage interface provided by the adapter, useful if you run multiple instances of the proxy.
 - `--watch-interval`: How long between each stale-cache check. Defaults to 30sec.
 - `--mem-usage`: Shows memory usage info every 30sec.
@@ -53,7 +53,12 @@ The MongoDB adapter also implements the external cache storage interfaces and st
 The methods implemented are `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
 Use the `--use-external-cache` option to enable it.
 
-# TODO
+# Notes
+
+- "host-rewrite" option is disabled for redirects.
+- Response status codes from upstream that's greater than 200 are not cached.
+
+# TODOs
 
 - DONE - Change naive implementation of response caching -- how to cache images and binary data properly?
 - Write tests
