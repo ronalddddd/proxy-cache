@@ -163,8 +163,7 @@
                     // Create the cache object using the upstream response
                     co = new CacheObject(cacheKey, proxyRes);
                     co.ready.then(function(co){
-                        //proxyCache.cacheCollection[co.cacheKey] = co;
-                        console.log("Cached %s", co.cacheKey)
+                        console.log("[%s] Cached", co.cacheKey)
                     });
                     proxyCache.cacheCollection[cacheKey] = co;
                 }
