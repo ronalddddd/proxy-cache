@@ -25,6 +25,10 @@
                         deserialized = (jsonString)? JSON.parse(jsonString) : {},
                         d = Promise.defer();
 
+                    //console.log("debug jsonString", jsonString);
+                    //console.log("debug deserialized", deserialized);
+                    //console.log("debug typeof deserialized", typeof deserialized);
+
                     co.cacheKey = cacheKey;
                     co.dateISOString = deserialized.dateISOString || new Date().toISOString();
                     co.statusCode = deserialized.statusCode || undefined;
@@ -34,6 +38,8 @@
                     co.hits = 0;
                     co.ready = d.promise;
                     co.res = res;
+
+                    //console.log("debug co", co);
 
                     // If input is a http.ServerResponse, we create and cache the data when the response finishes
                     if (res){
@@ -89,7 +95,7 @@
                         data: serializedData // this is why we need the custom toJSON implementation
                     };
 
-                return JSON.stringify(jsonObject);
+                return jsonObject;
             };
 
             CacheObject.prototype.appendChunk = function(chunk) {
