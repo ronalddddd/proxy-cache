@@ -153,12 +153,15 @@
                 var co,
                     cacheKey = getCacheKey(req),
                     shouldCache = ( // Conditions of when to apply cache
-                        ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) ) || // Case when URL Should be ignored
-                            ( ! (proxyRes.statusCode > 200) ) ); // Case when upstream response is not 200
+                        // Case when URL Should be ignored
+                        ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) ) &&
 
-                // Ignore Status Codes > 200
-                if(proxyRes.statusCode > 200){
-                    console.log("[%s] Proxy Response Status Code (%s) > 200, won't cache.", getCacheKey(req), proxyRes.statusCode);
+                        // Case when upstream response is not 200
+                        ( proxyRes.statusCode <= 200) );
+
+                if(!shouldCache){
+                    // Cache conditions not met
+                    console.log("[%s] Will not cache: %s %s", cacheKey, proxyRes.statusCode, req.url);
                 } else {
                     // Create the cache object using the upstream response
                     co = new CacheObject(cacheKey, proxyRes);
