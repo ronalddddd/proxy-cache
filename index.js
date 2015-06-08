@@ -18,7 +18,7 @@
                  * @returns {ProxyCache.CacheObject}
                  * @constructor
                  */
-                CacheObject = function(cacheKey, input){
+                    CacheObject = function(cacheKey, input){
                     var co = this,
                         res = (input instanceof stream.Readable)? input : null,
                         jsonString = (typeof input ===  'string')? input : null,
@@ -36,6 +36,7 @@
                     co.data = (deserialized.data)? new Buffer(deserialized.data, 'base64') : null;
                     co.buffers = [];
                     co.hits = 0;
+                    co.pooled = 0;
                     co.ready = d.promise;
                     co.res = res;
 
@@ -57,7 +58,7 @@
                             co.setHeaders(res.headers);
                             // Concat buffers
                             co.data = Buffer.concat(co.buffers);
-                            // Set external cache
+                            // Set external cache -- TODO: move this back out, should be ProxyCache's responsibility
                             if(proxyCache.adapter.setCache){
                                 verboseLog("Saving cache object to adapter storage...");
                                 proxyCache.adapter.setCache(cacheKey, co)
@@ -78,6 +79,7 @@
 
                     co.ready.then(function(res){
                         verboseLog("[%s] Cache object ready", cacheKey);
+                        co.pooled = 0; // reset pooled counter;
                     });
 
                     return co;
@@ -118,6 +120,11 @@
                 co.hits++;
             };
 
+            CacheObject.prototype.countPooled = function() {
+                var co = this;
+                co.pooled++;
+            };
+
             // Helpers
             function getCacheKey(req) {
                 var md = new MobileDetect(req.headers['user-agent']),
@@ -138,26 +145,28 @@
                 hostRewrite: false // true
             });
 
-            proxyCache.cacheCollection = {};
+            proxyCache.cacheCollection = {}; // getCacheKey(req) => CacheObject instance
 
             // Proxy Event Listeners
 
             proxyCache.proxy.on('proxyRes', function(proxyRes, req, res){
-                var shouldCache = ( // Conditions of when to apply cache
-                ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) ) || // Case when URL Should be ignored
-                ( ! (proxyRes.statusCode > 200) ) ); // Case when upstream response is not 200
+                var co,
+                    cacheKey = getCacheKey(req),
+                    shouldCache = ( // Conditions of when to apply cache
+                        ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) ) || // Case when URL Should be ignored
+                            ( ! (proxyRes.statusCode > 200) ) ); // Case when upstream response is not 200
 
                 // Ignore Status Codes > 200
                 if(proxyRes.statusCode > 200){
                     console.log("[%s] Proxy Response Status Code (%s) > 200, won't cache.", getCacheKey(req), proxyRes.statusCode);
                 } else {
-                    // Create the cache object
-                    new CacheObject(getCacheKey(req), proxyRes)
-                        .ready
-                        .then(function(co){
-                            proxyCache.cacheCollection[co.cacheKey] = co;
-                            console.log("Cached %s", co.cacheKey)
-                        });
+                    // Create the cache object using the upstream response
+                    co = new CacheObject(cacheKey, proxyRes);
+                    co.ready.then(function(co){
+                        //proxyCache.cacheCollection[co.cacheKey] = co;
+                        console.log("Cached %s", co.cacheKey)
+                    });
+                    proxyCache.cacheCollection[cacheKey] = co;
                 }
             });
 
@@ -176,17 +185,19 @@
             proxyCache.server = http.createServer(function (req, res) {
                 verboseLog("IN: %s", req.url);
                 verboseLog("Client Request headers:", req.headers);
-                var co = proxyCache.cacheCollection[getCacheKey(req)],
+                var cacheKey = getCacheKey(req),
+                    co = proxyCache.cacheCollection[cacheKey],
                     shouldCache = ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) );
 
-                if ( co ) {
-                    // Cache hit
+                if ( co ) { // Cache hit
                     co.countHit();
+                    if(!co.ready.isResolved()){
+                        co.countPooled();
+                    }
                     proxyCache.resEndCached(req, res, co);
-                    console.log("HIT: (%s times) %s",co.hits, co.cacheKey);
-                } else {
-                    // Cache miss -- check external cache
-                    console.log("MISS: %s", getCacheKey(req));
+                    console.log("[%s] HIT: %s times, pooled: %s",co.cacheKey,co.hits,co.pooled);
+                } else { // Cache miss -- check external cache
+                    console.log("[%s] MISS", getCacheKey(req));
                     // Try to find external cache
                     if(adapter.getCache && shouldCache){
                         adapter.getCache(getCacheKey(req))
@@ -244,7 +255,9 @@
         res.setHeader("X-Cache-Date", co.dateISOString);
         res.setHeader("X-Cache-Hits", co.hits);
 
-        res.end(co.data);
+        co.ready.then(function(){ // important -- ensures the cache is ready before sending
+            res.end(co.data);
+        });
     };
 
     ProxyCache.prototype.resEndProxied = function(req, res){

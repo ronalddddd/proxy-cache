@@ -63,8 +63,9 @@ Use the `--use-external-cache` option to enable it.
 - DONE - Change naive implementation of response caching -- how to cache images and binary data properly?
 - Write tests
 - Add feature to cleanup cache objects after a set memory threshold
-- Add feature to allow request pooling
+- DONE - Add feature to allow request pooling
 - Add feature to serve stale cache while making new proxy request to update cache
 - Add feature to regenerate cache (precache), generating the ones with the most cache hits first
 - DONE - Add a basic TTL cache adapter
+- Allow custom getCacheKey method
 - Enable library usage and create API
