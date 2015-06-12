@@ -3,6 +3,7 @@
 (function(){
 
     var verboseLog = (process.env.npm_config_verbose_log)? console.log : function() {},
+        format = require('util').format,
         http = require('http'),
         httpProxy = require('http-proxy'),
         stream = require("stream"),
@@ -127,10 +128,11 @@
 
             // Helpers
             function getCacheKey(req) {
-                var md = new MobileDetect(req.headers['user-agent']),
-                    cacheKey = ((md.mobile())? '_mobile_' : '') + req.url;
-
-                return cacheKey;
+                var md = new MobileDetect(req.headers['user-agent']);
+                return format("%s:%s:%s",
+                    ((md.mobile())? 'mobile' : 'desktop'),  // Device type
+                    req.headers.host,                           // Request host
+                    req.url);                               // Request URL
             }
 
             // Var init
@@ -156,8 +158,8 @@
                         // Case when URL Should be ignored
                         ( ! proxyCache.ignoreRegex || ! proxyCache.ignoreRegex.test(req.url) ) &&
 
-                        // Case when upstream response is not 200
-                        ( proxyRes.statusCode <= 200) );
+                            // Case when upstream response is not 200
+                            ( proxyRes.statusCode <= 200) );
 
                 if(!shouldCache){
                     // Cache conditions not met
