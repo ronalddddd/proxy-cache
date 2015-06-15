@@ -7,6 +7,7 @@
         http = require('http'),
         httpProxy = require('http-proxy'),
         stream = require("stream"),
+        zlib = require('zlib'),
         MobileDetect = require('mobile-detect'),
         Promise = require('bluebird'),
         ProxyCache = function(adapter, options){
@@ -52,7 +53,7 @@
                         });
                         // Proxy response ended -- save the response status, headers and concat the data buffers collected above
                         res.on('end', function(){
-                            verboseLog("Response ended for cache key %s", cacheKey);
+                            verboseLog("Response ended for cache key %s", co.cacheKey);
                             verboseLog("Caching Response code:", res.statusCode);
                             co.setStatusCode(res.statusCode);
                             verboseLog("Caching Response headers:", res.headers);
@@ -60,11 +61,13 @@
                             // Concat buffers
                             co.data = Buffer.concat(co.buffers);
                             // Set external cache -- TODO: move this back out, should be ProxyCache's responsibility
-                            if(proxyCache.adapter.setCache){
+                            if (!co.data || !co.data.length || co.data.length === 0){ // Empty response -- don't cache
+                                d.reject(new Error("Empty upstream response"));
+                            } else if(proxyCache.adapter.setCache){
                                 verboseLog("Saving cache object to adapter storage...");
-                                proxyCache.adapter.setCache(cacheKey, co)
+                                proxyCache.adapter.setCache(co.cacheKey, co)
                                     .then(function(res){
-                                        console.log("Externally cached: %s", cacheKey);
+                                        console.log("Externally cached: %s", co.cacheKey);
                                         d.resolve(co);
                                     });
                             } else {
@@ -78,10 +81,14 @@
                         d.reject(new Error("CacheObject must be created from a http.ServerResponse or a serialized CacheObject instance."));
                     }
 
-                    co.ready.then(function(res){
-                        verboseLog("[%s] Cache object ready", cacheKey);
-                        co.pooled = 0; // reset pooled counter;
-                    });
+                    co.ready
+                        .then(function(res){
+                            verboseLog("[%s] Cache object ready", co.cacheKey);
+                            co.pooled = 0; // reset pooled counter;
+                        })
+                        .catch(function(err){
+                            console.warn("[%s] Cache object failed to ready: %s", co.cacheKey, err.toString());
+                        });
 
                     return co;
                 };
@@ -166,11 +173,15 @@
                     console.log("[%s] Will not cache: %s %s", cacheKey, proxyRes.statusCode, req.url);
                 } else {
                     // Create the cache object using the upstream response
-                    co = new CacheObject(cacheKey, proxyRes);
-                    co.ready.then(function(co){
-                        console.log("[%s] Cached", co.cacheKey)
-                    });
-                    proxyCache.cacheCollection[cacheKey] = co;
+                    proxyCache.cacheCollection[cacheKey] = co = new CacheObject(cacheKey, proxyRes);
+                    co.ready
+                        .then(function(co){
+                            console.log("[%s] Cached", co.cacheKey)
+                        })
+                        .catch(function(err){
+                            delete proxyCache.cacheCollection[cacheKey];
+                            console.warn("Error readying cache object, removed from cache collection");
+                        });
                 }
             });
 
@@ -187,6 +198,7 @@
             // Create the cache server
 
             proxyCache.server = http.createServer(function (req, res) {
+                console.log("Starting Proxy Cache Server...");
                 verboseLog("IN: %s", req.url);
                 verboseLog("Client Request headers:", req.headers);
                 var cacheKey = getCacheKey(req),
@@ -269,6 +281,28 @@
         proxyCache.proxy.web(req, res, {
             target: (process.env.npm_config_http_protocol || 'http') + '://' + proxyCache.proxyTarget
         });
+    };
+
+    ProxyCache.prototype.useCompression = function(upstream, req, res){
+        var acceptEncoding = req.headers['accept-encoding'];
+
+        // Apply compression appropriately
+        if (acceptEncoding.match(/\bdeflate\b/)) {
+            console.log("Compressing response with deflate");
+            res.setHeader('content-encoding', 'deflate');
+            upstream.pipe(zlib.createDeflate()).pipe(res);
+        } else if (acceptEncoding.match(/\bgzip\b/)) {
+            console.log("Compressing response with gzip");
+            res.setHeader('content-encoding', 'gzip');
+            upstream.pipe(zlib.createGzip()).pipe(res);
+        } else {
+            upstream.pipe(res);
+        }
+    };
+
+    ProxyCache.prototype.stopServer = function(){
+        var proxyCache = this;
+        proxyCache.server.close();
     };
 
     module.exports = ProxyCache;
