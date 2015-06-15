@@ -130,8 +130,8 @@
             function getCacheKey(req) {
                 var md = new MobileDetect(req.headers['user-agent']);
                 return format("%s:%s:%s",
-                    ((md.mobile())? 'mobile' : 'desktop'),  // Device type
-                    req.headers.host,                           // Request host
+                    ((md.phone())? 'phone' : 'not_phone'),  // Device type
+                    req.headers.host,                       // Request host
                     req.url);                               // Request URL
             }
 
