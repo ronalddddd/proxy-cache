@@ -20,12 +20,22 @@
                  * @returns {ProxyCache.CacheObject}
                  * @constructor
                  */
-                    CacheObject = function(cacheKey, input){
+                    CacheObject = function(cacheKey, input, req){
                     var co = this,
                         res = (input instanceof stream.Readable)? input : null,
                         jsonString = (typeof input ===  'string')? input : null,
                         deserialized = (jsonString)? JSON.parse(jsonString) : {},
                         d = Promise.defer();
+
+                    // Save some debug info based about the original request
+                    if (req){
+                        var md = new MobileDetect(req.headers['user-agent']);
+                        co.debug = {
+                            req_url: req.url,
+                            req_headers: req.headers,
+                            req_device: ((md.phone())? 'phone' : 'not_phone')
+                        };
+                    }
 
                     //console.log("debug jsonString", jsonString);
                     //console.log("debug deserialized", deserialized);
@@ -102,7 +112,8 @@
                         dateISOString: co.dateISOString,
                         statusCode: co.statusCode,
                         headers: co.headers,
-                        data: serializedData // this is why we need the custom toJSON implementation
+                        data: serializedData, // this is why we need the custom toJSON implementation
+                        debug: co.debug || {}
                     };
 
                 return jsonObject;
@@ -173,7 +184,8 @@
                     console.log("[%s] Will not cache: %s %s", cacheKey, proxyRes.statusCode, req.url);
                 } else {
                     // Create the cache object using the upstream response
-                    proxyCache.cacheCollection[cacheKey] = co = new CacheObject(cacheKey, proxyRes);
+                    proxyCache.cacheCollection[cacheKey] = co = new CacheObject(cacheKey, proxyRes, req);
+                    // When cache object is ready
                     co.ready
                         .then(function(co){
                             console.log("[%s] Cached", co.cacheKey)
@@ -196,9 +208,8 @@
             });
 
             // Create the cache server
-
+            console.log("Creating Proxy Cache Server...");
             proxyCache.server = http.createServer(function (req, res) {
-                console.log("Starting Proxy Cache Server...");
                 verboseLog("IN: %s", req.url);
                 verboseLog("Client Request headers:", req.headers);
                 var cacheKey = getCacheKey(req),
@@ -268,6 +279,7 @@
             res.setHeader(headerKey, co.headers[headerKey]);
         }
         res.statusCode = co.statusCode || 500;
+        res.setHeader("X-Cache-Key", co.cacheKey);
         res.setHeader("X-Cache-Date", co.dateISOString);
         res.setHeader("X-Cache-Hits", co.hits);
 

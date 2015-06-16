@@ -1,6 +1,6 @@
 {
   "name": "rn-proxy-cache",
-  "version": "0.4.5",
+  "version": "0.4.7",
   "description": "A simple proxy cache with an adapter interface for stale-cache checking and external cache storage. Comes with a TTL adapter and a MongoDB adapter.",
   "main": "index.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "bluebird": "^2.9.27",
     "connect": "^3.3.5",
     "http-proxy": "^1.11.1",
-    "mobile-detect": "^1.2.0",
+    "mobile-detect": "0.4.3",
     "mongodb": "^2.0.33"
   },
   "devDependencies": {
