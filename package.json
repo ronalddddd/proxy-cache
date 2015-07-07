@@ -1,6 +1,6 @@
 {
   "name": "rn-proxy-cache",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "An express middleware compatible proxy cache with an extensible cache adapter interface. Comes with a TTL and MongoDB adapters.",
   "main": "index.js",
   "scripts": {
