@@ -1,6 +1,6 @@
 # Proxy Cache
 
-An express middleware compatible proxy cache with an extensible adapter interface. Comes with a TTL adapter and a MongoDB adapter.
+An express middleware compatible proxy cache with an extensible cache adapter interface. Comes with a TTL and MongoDB adapters.
 
 # Install
 
@@ -9,57 +9,73 @@ An express middleware compatible proxy cache with an extensible adapter interfac
 
 # Usage
 
-## Simple TTL Caching
+## Stand-alone server with ttl caching
 
     npm start \
     --target-host="www.google.com:80" \
     --proxy-port=8080 \
     --ttl=30000
 
-## Using the built-in MongoDB adapter with some additional settings
+- `--target-host="www.google.com:80"`: your upstream host
+- `--proxy-port=8080`: the port for this proxy server
+- `--ttl=30000`: TTL caching in milliseconds, defaults to 600000ms (10 minutes).
+
+## Stand-alone server with MongoDB adapter
 
     npm start \
     --target-host="localhost:8081" \
     --proxy-port=8080 \
-    --ignore-regex="^\/assets" \
     --mongodb-url="mongodb://localhost:27017/test" \
     --use-external-cache \
-    --watch-interval=5000 \
-    --mem-usage \
-    --verbose-log
+    --watch-interval=60000 \
 
-## Required Settings
+- `--mongodb-url`: Supply this to use the MongoDB adapter. Will watch the `PublishSchedule` collection that contains documents with the `publish_date` ISO Date string field and clears cache accordingly.
+- `--use-external-cache`: Enables storing cached objects in the external storage interface provided by the adapter, useful if you run multiple instances of the proxy or surviving restarts
+- `--watch-interval`: How long between each time it checks the PublishSchedule collection. Defaults to 30sec.
 
-- `--target-host`: The host and port you're proxying to.
-- `--proxy-port`: The port this proxy will serve on.
+## Additional parameters
 
-## Optional Settings
-
-- `--ignore-regex`: Regular expression of a URL pattern to bypass cache.
-- `--ttl`: TTL caching in milliseconds, defaults to 600000ms (10 minutes).
-- `--mongodb-url`: Supply this to use the MongoDB adapter.
-- `--use-external-cache`: Enables storing cached objects in the external storage interface provided by the adapter, useful if you run multiple instances of the proxy.
-- `--watch-interval`: How long between each stale-cache check. Defaults to 30sec.
 - `--mem-usage`: Shows memory usage info every 30sec.
 - `--verbose-log`: Verbose logging for debugging.
 
 ## Express middleware
 
-    var ProxyCache = require('rn-proxy-cache');
-    proxyCache = new ProxyCache(options);
+    var ProxyCache = require('rn-proxy-cache'),
+        express = require('express');
+
+    var options = {
+            targetHost: "www.google.com:80"
+        },
+        proxyCache = new ProxyCache(options),
+        app = express();
+
+    app.use(proxyCache);
     proxyCache.ready.then(function(){
-        app.use(proxyCache);
+        app.listen(proxyPort, function(){
+            console.log("ProxyCache server is ready");
+        });
     });
 
-Optionally add a middleware in front of this and set `req.shouldCache` to let ProxyCache know if this request should be cached
+Optionally add a middleware in front of this and set `req.shouldCache` to let ProxyCache know if which requests should be cached
 
-# MongoDB Adapter
+# Creating a custom Adapter
 
-The MongoDB adapter watches a "PublishSchedule" collection that stores a "publish_date" field indicating when the next publish will happen and hence invalidate existing cache.
+To implement a custom Adapter, create a node module with the following constructor interface: `CacheAdapter(proxyCache, options){ ... }`.
 
-The MongoDB adapter also implements the external cache storage interfaces and stores cached data in the "ProxyCache" collection.
-The methods implemented are `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
-Use the `--use-external-cache` option to enable it.
+There are 2 things you can do with a custom adapter:
+
+    1. Decide when to invalidate the memory cache by calling `proxyCache.clearAll()`
+    2. Implement external cache storage with the following interfaces as CacheAdapter's prototype methods: `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
+
+Finally if you need to init the adapter asynchronously, you can set a `.ready` promise property on the adapter instance and resolve when ready.
+
+# Features
+
+- Request pooling: multiple requests with a cache miss will be pooled, i.e. only one request will be made upstream
+- Fast in memory caching -- adapter cache are used as a second layer
+- Extensible Adapter API
+- Express middleware compatible
+- Gzip compression when using the stand-alone server
 
 # Notes
 
@@ -69,14 +85,10 @@ Use the `--use-external-cache` option to enable it.
 
 # TODOs
 
-- DONE - Change naive implementation of response caching -- how to cache images and binary data properly?
-- Write tests
+- Write more tests
 - Add feature to cleanup cache objects after a set memory threshold
-- DONE - Add feature to allow request pooling
 - Add feature to serve stale cache while making new proxy request to update cache
 - Add feature to regenerate cache (precache), generating the ones with the most cache hits first
-- DONE - Add a basic TTL cache adapter
-- Allow custom getCacheKey method
-- Enable library usage and create API
-- Enable middleware to pass through properly and cache response stream instead of making a proxy call
+- Add feature to set custom getCacheKey method
+- Enable middleware to pass through without using http-proxy
 - Update readme to include all options
