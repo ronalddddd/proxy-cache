@@ -70,8 +70,8 @@ To implement a custom Adapter, create a node module with the following construct
 
 There are 2 things you can do with a custom adapter:
 
-    1. Decide when to invalidate the memory cache by calling `proxyCache.clearAll()`
-    2. Implement external cache storage with the following interfaces as CacheAdapter's prototype methods: `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
+1. Decide when to invalidate the memory cache by calling `proxyCache.clearAll()`
+2. Implement external cache storage with the following interfaces as CacheAdapter's prototype methods: `setCache(key, value)`, `getCache(key)`, `clearCache()`, all returning a promise that resolves when the task is completed.
 
 Finally if you need to init the adapter asynchronously, you can set a `.ready` promise property on the adapter instance and resolve when ready.
 
@@ -98,3 +98,11 @@ Finally if you need to init the adapter asynchronously, you can set a `.ready` p
 - Add feature to set custom getCacheKey method
 - Enable middleware to pass through without using http-proxy
 - Update readme to include all options
+
+# Build statuses
+
+## master
+[![Build Status](https://travis-ci.org/ronalddddd/proxy-cache.svg?branch=master)](https://travis-ci.org/ronalddddd/proxy-cache)
+
+## develop
+[![Build Status](https://travis-ci.org/ronalddddd/proxy-cache.svg?branch=develop)](https://travis-ci.org/ronalddddd/proxy-cache)
