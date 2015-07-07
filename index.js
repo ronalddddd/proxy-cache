@@ -1,8 +1,4 @@
 'use strict';
-var ProxyCache = require('./lib/ProxyCache'),
-    ProxyCacheMiddleware = function(options){
-        var pc = new ProxyCache(options);
-        return pc.createMiddleware;
-    };
+var ProxyCache = require('./lib/ProxyCache');
 
-module.exports = ProxyCacheMiddleware;
+module.exports = ProxyCache;

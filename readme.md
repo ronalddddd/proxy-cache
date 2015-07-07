@@ -11,20 +11,25 @@ An express middleware compatible proxy cache with an extensible cache adapter in
 
 ## Stand-alone server with ttl caching
 
+Note the `--spoof-host-header` option rewrites your "Host" header value to match the target host value. You probably won't use this in a normal proxy-cache setup unless you're running some sort of mirror site.
+
     npm start \
-    --target-host="www.google.com:80" \
+    --target-host="highscalability.com:80" \
     --proxy-port=8080 \
+    --spoof-host-header \
     --ttl=30000
 
-- `--target-host="www.google.com:80"`: your upstream host
-- `--proxy-port=8080`: the port for this proxy server
-- `--ttl=30000`: TTL caching in milliseconds, defaults to 600000ms (10 minutes).
+- `--target-host="www.google.com:80"`: your upstream host.
+- `--proxy-port=8080`: the port for this proxy server.
+- `--spoof-host-header`: use this to rewrite `Host` header value to the `--target-host` value. Only useful if your upstream application needs to use the domain specified by the `--target-host` value.
+- `--ttl=30000`: TTL caching in milliseconds, defaults to 600000ms (10 minutes)
 
 ## Stand-alone server with MongoDB adapter
 
     npm start \
-    --target-host="localhost:8081" \
+    --target-host="www.apple.com:80" \
     --proxy-port=8080 \
+    --spoof-host-header \
     --mongodb-url="mongodb://localhost:27017/test" \
     --use-external-cache \
     --watch-interval=60000 \
@@ -41,17 +46,20 @@ An express middleware compatible proxy cache with an extensible cache adapter in
 ## Express middleware
 
     var ProxyCache = require('rn-proxy-cache'),
-        express = require('express');
-
-    var options = {
-            targetHost: "www.google.com:80"
-        },
-        proxyCache = new ProxyCache(options),
+        express = require('express'),
         app = express();
 
-    app.use(proxyCache());
-    app.listen(8181, function(){
-        console.log("ProxyCache server is ready");
+    var proxyCache = new ProxyCache({
+        targetHost: "highscalability.com:80",
+        spoofHostHeader: true // again, doubt you need to enable this if you're running your own site
+    });
+
+    app.use(proxyCache.createMiddleware());
+
+    proxyCache.ready.then(function() {
+        app.listen(8181, function () {
+            console.log("ProxyCache server is ready");
+        });
     });
 
 Optionally add a middleware in front of this and set `req.shouldCache` to let ProxyCache know if which requests should be cached
