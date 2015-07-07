@@ -10,6 +10,7 @@ var expect = require('chai').expect,
 describe("ProxyCache.js", function () {
     describe("A proxyCache instance", function(){
         var proxyCache,
+            proxyCacheServer,
             timeout = 0,
             target = http.createServer(function(req, res){
                 switch(req.url){
@@ -45,13 +46,20 @@ describe("ProxyCache.js", function () {
 
         beforeEach(function(ready){
             timeout = 0;
-            if(proxyCache) { proxyCache.stopServer(); }
+
+            if (proxyCacheServer) {
+                proxyCacheServer.close();
+            }
+
             proxyCache = new ProxyCache({
                 adapter: adapter,
                 targetHost: "localhost:8801",
-                ignoreRegex: undefined,
-                proxyPort: 8181
+                ignoreRegex: undefined
             });
+
+            proxyCacheServer = http.createServer(function (req, res) {
+                proxyCache.handleRequest(req, res);
+            }).listen(8181);
 
             ready();
         });
