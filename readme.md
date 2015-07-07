@@ -49,11 +49,9 @@ An express middleware compatible proxy cache with an extensible cache adapter in
         proxyCache = new ProxyCache(options),
         app = express();
 
-    app.use(proxyCache);
-    proxyCache.ready.then(function(){
-        app.listen(proxyPort, function(){
-            console.log("ProxyCache server is ready");
-        });
+    app.use(proxyCache());
+    app.listen(8181, function(){
+        console.log("ProxyCache server is ready");
     });
 
 Optionally add a middleware in front of this and set `req.shouldCache` to let ProxyCache know if which requests should be cached
