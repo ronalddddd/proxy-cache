@@ -1,44 +1,28 @@
-var ProxyCache = require('./index.js'),
-    Promise = require('bluebird'),
-    MongoClient = Promise.promisifyAll(require('mongodb').MongoClient),
+var ProxyCache = require('./lib/ProxyCache'),
+    express = require('express'),
+    compression = require('compression'),
     builtInAdapter = (process.env.npm_config_mongodb_url)? './lib/adapters/proxy-cache-mongo' : './lib/adapters/proxy-cache-ttl',
     selectedAdapter = process.env.npm_config_adapter || builtInAdapter,
-    Driver = require(selectedAdapter);
+    Adapter = require(selectedAdapter),
+    proxyPort = (process.env.npm_config_proxy_port)? parseInt(process.env.npm_config_proxy_port) : 8181,
+    targetHost = process.env.npm_config_target_host || "localhost:8080",
+    spoofHostHeader = (process.env.npm_config_spoof_host_header !== undefined) || false,
+    app = express();
 
-var adapter = new Driver(),
-    proxyCache,
-    watchInterval = (process.env.npm_config_watch_interval)? parseInt(process.env.npm_config_watch_interval) : 30000,
-    watcher;
-
-function StopWatching() {
-    if (watcher){
-        clearInterval(watcher);
-        console.log("Stopped watcher for stale checking.");
-    }
-}
-
-function StartWatching(){
-    console.log("Started watcher for stale checking.");
-    watcher = setInterval(function(){
-        adapter.checkIfStale()
-            .then(function(isStale){
-                if (isStale){
-                    proxyCache.clearAll();
-                }
-            });
-    }, watchInterval);
-}
-
-// MAIN
 console.log("Using adapter %s",selectedAdapter);
-adapter.ready.then(function(){
-    console.log("Adapter is ready.");
-    console.log("Creating proxy to %s",process.env.npm_config_target_host);
-    proxyCache = new ProxyCache(adapter, {
-        targetHost: process.env.npm_config_target_host || "localhost",
-        ignoreRegex: process.env.npm_config_ignore_regex || undefined,
-        proxyPort: (process.env.npm_config_proxy_port)?
-            parseInt(process.env.npm_config_proxy_port) : undefined
+console.log("Creating proxy to %s", targetHost);
+var proxyCache = new ProxyCache({
+    Adapter: Adapter,
+    targetHost: targetHost,
+    spoofHostHeader: spoofHostHeader
+});
+
+app.use(compression());
+app.use(proxyCache.createMiddleware());
+
+proxyCache.ready.then(function(){
+    console.log("Starting Proxy Cache Server...");
+    app.listen(proxyPort, function(){
+        console.log("ProxyCache server is ready");
     });
-    StartWatching();
 });
