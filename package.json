@@ -4,7 +4,7 @@
   "description": "An express middleware compatible proxy cache with an extensible cache adapter interface. Comes with a TTL and MongoDB adapters.",
   "main": "index.js",
   "scripts": {
-    "test": "mocha",
+    "test": "./node_modules/mocha/bin/mocha",
     "start": "node server.js"
   },
   "author": "Ronald Ng",
@@ -20,7 +20,8 @@
   },
   "devDependencies": {
     "chai": "^3.0.0",
-    "request": "^2.57.0"
+    "request": "^2.57.0",
+    "mocha": "latest"
   },
   "repository": {
     "type": "git",
