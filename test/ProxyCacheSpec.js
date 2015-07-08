@@ -5,7 +5,13 @@ var expect = require('chai').expect,
     http = require('http'),
     Promise = require('bluebird'),
     request = Promise.promisifyAll(require('request')),
-    MD = require('mobile-detect');
+    MD = require('mobile-detect'),
+
+    builtInAdapter = (process.env.npm_config_mongodb_url)? '../lib/adapters/proxy-cache-mongo' : '../lib/adapters/proxy-cache-ttl',
+    selectedAdapter = process.env.npm_config_adapter || builtInAdapter,
+    Adapter = require(selectedAdapter);
+
+process.env.npm_config_verbose_log = true;
 
 describe("ProxyCache.js", function () {
     describe("A proxyCache instance", function(){
@@ -13,12 +19,16 @@ describe("ProxyCache.js", function () {
             proxyCacheServer,
             timeout = 0,
             target = http.createServer(function(req, res){
+                console.log(req.url, req.headers);
                 switch(req.url){
                     case '/emptyResponse':
                         res.end('');
                         break;
                     case '/hello':
                         res.end('hello');
+                        break;
+                    case '/dateISOString':
+                        res.end(new Date().toISOString());
                         break;
                     case '/mobileDetect':
                         timeout += 500; // every subsequent call will take longer to return
@@ -52,7 +62,7 @@ describe("ProxyCache.js", function () {
             }
 
             proxyCache = new ProxyCache({
-                adapter: adapter,
+                Adapter: Adapter,
                 targetHost: "localhost:8801",
                 ignoreRegex: undefined
             });
@@ -61,7 +71,9 @@ describe("ProxyCache.js", function () {
                 proxyCache.handleRequest(req, res);
             }).listen(8181);
 
-            ready();
+            proxyCache.ready.then(function(){
+                ready();
+            });
         });
 
         it("should not cache an empty response", function(done){
@@ -152,25 +164,30 @@ describe("ProxyCache.js", function () {
         });
 
         it("should pool requests to the same URL", function(done){
-            Promise.all([
-                    request.getAsync('http://localhost:8181/delay', {}),
-                    request.getAsync('http://localhost:8181/delay', {}),
-                    request.getAsync('http://localhost:8181/delay', {}),
-                    request.getAsync('http://localhost:8181/delay', {})
-                ])
-                .then(function(res){
-                    done();
-                })
-                .catch(function(err){
-                    done(err);
-                });
+            proxyCache.clearAll();
+            var test = function(){
+                console.log("Testing cache pooling...");
+                Promise.all([
+                        request.getAsync('http://localhost:8181/delay', {}),
+                        request.getAsync('http://localhost:8181/delay', {}),
+                        request.getAsync('http://localhost:8181/delay', {}),
+                        request.getAsync('http://localhost:8181/delay', {})
+                    ])
+                    .then(function(res){
+                        done();
+                    })
+                    .catch(function(err){
+                        done(err);
+                    });
 
-            setTimeout(function checkCacheObjectPool(){
-                //console.log(proxyCache.cacheCollection);
-                var co = proxyCache.cacheCollection["not_phone:localhost:8181:/delay"];
-                expect(co).to.exist;
-                expect(co.pooled).to.be.greaterThan(0);
-            }, 300);
+                setTimeout(function checkCacheObjectPool(){
+                    //console.log(proxyCache.cacheCollection);
+                    var co = proxyCache.cacheCollection["not_phone:localhost:8181:/delay"];
+                    expect(co).to.exist;
+                    expect(co.pooled).to.be.greaterThan(0);
+                }, 300);
+            };
+            setTimeout(test, 500); // wait for adapter cache to clear (i.e. mongodb adapter)
         });
 
         it("should respond to all pooled requests when proxy response completes.", function(done){
@@ -190,6 +207,76 @@ describe("ProxyCache.js", function () {
                 .catch(function(err){
                     done(err);
                 });
+        });
+
+        it("should asynchronously update cache if allowStaleCache option is enabled", function(done){
+            var prevData,
+                url = 'http://localhost:8181/dateISOString',
+                expectedCacheKey = "not_phone:localhost:8181:/dateISOString";
+            timeout = 0;
+
+            if (proxyCacheServer) {
+                proxyCacheServer.close();
+            }
+
+            proxyCache = new ProxyCache({
+                Adapter: Adapter,
+                targetHost: "localhost:8801",
+                ignoreRegex: undefined,
+                allowStaleCache: true
+            });
+
+            proxyCache.ready.then(function(){
+                proxyCacheServer = http.createServer(function (req, res) {
+                    proxyCache.handleRequest(req, res);
+                }).listen(8181);
+
+                request.getAsync({
+                    url: url,
+                    headers: {foo: "bar"}
+                })
+                    .then(function(res){
+                        return request.getAsync(url, {}); // create the cache entry
+                    })
+                    .then(function(res2){
+                        var co = proxyCache.cacheCollection[expectedCacheKey];
+                        expect(co).to.exist;
+                        expect(co.hits).to.equal(1);
+                        proxyCache.clearAll();
+                        expect(co.stale).to.exist.and.equal(true);
+                        expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
+                        console.log(proxyCache.cacheCollection[expectedCacheKey].data);
+
+                        prevData = co.data;
+
+                        console.log("Triggering update.");
+                        return request.getAsync(url, {}); // trigger the update
+                    })
+                    .then(function(res3){
+                        expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
+                        expect(proxyCache.cacheCollection[expectedCacheKey].stale).to.exist.and.equal(true);
+                        expect(proxyCache.cacheCollection[expectedCacheKey].data).to.exist.and.equal(prevData); // confirm that we've been served the staled cache first
+                        console.log(proxyCache.cacheCollection[expectedCacheKey].data);
+
+                        expect(proxyCache.cacheCollection[expectedCacheKey]._updatePromise).to.exist;
+                        return proxyCache.cacheCollection[expectedCacheKey]._updatePromise
+                            .then(function(res){
+                                console.log("Cache should be done updating.");
+                                // Make the request again and check if the cache has been updated
+                                return request.getAsync(url, {});
+                            });
+                    })
+                    .then(function(res4){
+                        expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
+                        expect(proxyCache.cacheCollection[expectedCacheKey].stale).to.exist.and.equal(false);
+                        expect(proxyCache.cacheCollection[expectedCacheKey].data).to.exist.and.not.equal(prevData); // confirm that we've been served the staled cache first
+                        console.log(proxyCache.cacheCollection[expectedCacheKey].data);
+                        done();
+                    })
+                    .catch(function(err){
+                        done(err);
+                    });
+            });
         });
     });
 });

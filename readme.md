@@ -82,6 +82,7 @@ Finally if you need to init the adapter asynchronously, you can set a `.ready` p
 - Extensible Adapter API
 - Express middleware compatible
 - Gzip compression when using the stand-alone server
+- Stale-caching: serve stale cache while updating the cache object asynchronously in the background
 
 # Notes
 
@@ -93,7 +94,6 @@ Finally if you need to init the adapter asynchronously, you can set a `.ready` p
 
 - Write more tests
 - Add feature to cleanup cache objects after a set memory threshold
-- Add feature to serve stale cache while making new proxy request to update cache
 - Add feature to regenerate cache (precache), generating the ones with the most cache hits first
 - Add feature to set custom getCacheKey method
 - Enable middleware to pass through without using http-proxy
