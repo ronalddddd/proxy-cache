@@ -270,6 +270,7 @@ describe("ProxyCache.js", function () {
                         expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
                         expect(proxyCache.cacheCollection[expectedCacheKey].stale).to.exist.and.equal(false);
                         expect(proxyCache.cacheCollection[expectedCacheKey].data).to.exist.and.not.equal(prevData); // confirm that we've been served the staled cache first
+                        expect(proxyCache.cacheCollection[expectedCacheKey].statusCode).to.exist.and.lte(200);
                         console.log(proxyCache.cacheCollection[expectedCacheKey].data);
                         done();
                     })
