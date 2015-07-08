@@ -6,7 +6,8 @@ var ProxyCache = require('./lib/ProxyCache'),
     Adapter = require(selectedAdapter),
     proxyPort = (process.env.npm_config_proxy_port)? parseInt(process.env.npm_config_proxy_port) : 8181,
     targetHost = process.env.npm_config_target_host || "localhost:8080",
-    spoofHostHeader = (process.env.npm_config_spoof_host_header !== undefined) || false,
+    spoofHostHeader = (process.env.npm_config_spoof_host_header !== undefined),
+    staleCaching = (process.env.npm_config_stale_caching !== undefined),
     app = express();
 
 console.log("Using adapter %s",selectedAdapter);
@@ -14,7 +15,8 @@ console.log("Creating proxy to %s", targetHost);
 var proxyCache = new ProxyCache({
     Adapter: Adapter,
     targetHost: targetHost,
-    spoofHostHeader: spoofHostHeader
+    spoofHostHeader: spoofHostHeader,
+    allowStaleCache: true //staleCaching
 });
 
 app.use(compression());
