@@ -10,6 +10,7 @@ Programmable reverse caching proxy. Use as a stand-alone app or an express middl
 - Express middleware compatible
 - Gzip compression when using the stand-alone server
 - Stale-caching: serve stale cache while updating the cache object asynchronously in the background
+- Remove cache objects (largest and least hit ones first) after a set memory threshold (defaults to 2GiB)
 
 # Install
 
@@ -81,6 +82,7 @@ Use `new ProxyCache(options)` to create a new instance of the proxy cache. `opti
 these options are passed to the `httpProxy.createProxyServer()` method.
 - `allowStaleCache`: allow stale cache to be served while asynchronously making a request upstream to update the cache object.
 - `spoofHostHeader`: rewrite the upstream request header `Host` value to match `targetHost`
+- `memGiBThreshold`: the maximum memory threshold before cleaning up some less hit cache objects to free memory
 
 Optionally set `req.shouldCache` to let ProxyCache know if a request should be cached.
 
@@ -108,7 +110,6 @@ This should be the most common case of upstream response variations. Ideally, we
 Pull requests are welcome :)
 
 - Write more tests
-- Add feature to cleanup cache objects after a set memory threshold
 - Add feature to regenerate cache (precache), generating the ones with the most cache hits first
 - Add option to override `ProxyCache.prototype.getCacheKey` method
 - Add option to rewrite upstream path with a generated middleware -- e.g. `app.use('/path', proxyCache.createMiddleware({rewrite: rewritePathMethod }))`

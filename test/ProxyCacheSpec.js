@@ -6,12 +6,21 @@ var expect = require('chai').expect,
     Promise = require('bluebird'),
     request = Promise.promisifyAll(require('request')),
     MD = require('mobile-detect'),
+    crypto = require('crypto'),
+    _ = require('lodash'),
 
     builtInAdapter = (process.env.npm_config_mongodb_url)? '../lib/adapters/proxy-cache-mongo' : '../lib/adapters/proxy-cache-ttl',
     selectedAdapter = process.env.npm_config_adapter || builtInAdapter,
     Adapter = require(selectedAdapter);
 
+var memGiBThreshold = 0.25,
+    randomDataSizeBytes = memGiBThreshold *1024*1024*1024 / 16;
+
 process.env.npm_config_verbose_log = true;
+
+function printMemUsage(){
+    console.log("Memory usage after requests: %s GiB",process.memoryUsage().rss / 1073741824);
+}
 
 describe("ProxyCache.js", function () {
     describe("A proxyCache instance", function(){
@@ -50,30 +59,38 @@ describe("ProxyCache.js", function () {
                         setTimeout(function(){res.end('delayed')}, 1000);
                         break;
                     default:
-                        throw new Error("UNEXPECTED URL");
+                        if (req.url.indexOf("/randomData") == 0){
+                            res.end(crypto.randomBytes(randomDataSizeBytes)); // 268435456 Bytes (0.25 GiB) divided by 16
+                        } else {
+                            throw new Error("UNEXPECTED URL");
+                        }
                 }
-            }).listen(8801);
+            }).listen(8801),
+            resetProxyCache = function(options, ready){
+                timeout = 0;
+
+                if (proxyCacheServer) {
+                    proxyCacheServer.close();
+                }
+
+                proxyCache = new ProxyCache(options);
+
+                proxyCacheServer = http.createServer(function (req, res) {
+                    proxyCache.handleRequest(req, res);
+                }).listen(8181);
+
+                proxyCache.ready.then(function(){
+                    ready();
+                });
+            };
 
         beforeEach(function(ready){
-            timeout = 0;
-
-            if (proxyCacheServer) {
-                proxyCacheServer.close();
-            }
-
-            proxyCache = new ProxyCache({
+            resetProxyCache({
                 Adapter: Adapter,
                 targetHost: "localhost:8801",
-                ignoreRegex: undefined
-            });
-
-            proxyCacheServer = http.createServer(function (req, res) {
-                proxyCache.handleRequest(req, res);
-            }).listen(8181);
-
-            proxyCache.ready.then(function(){
-                ready();
-            });
+                memGiBThreshold: memGiBThreshold,
+                memCheckIntervalMs: 0
+            }, ready);
         });
 
         it("should not cache an empty response", function(done){
@@ -282,6 +299,93 @@ describe("ProxyCache.js", function () {
                         done(err);
                     });
             });
+        });
+
+        it("checkMemory() should invoke freeMemory() if threshold is reached (memGiBThreshold is set at "+memGiBThreshold+" for this test)", function(done){
+            var requestArr = [],
+                lastCacheCount = 0,
+                expectedCacheCountRemaining = 1;
+
+            console.log("Memory usage before requests: %s GiB",process.memoryUsage().rss / 1073741824);
+
+            for(var i=0; i < (memGiBThreshold * 1024 * 1024 * 1024 / randomDataSizeBytes) + expectedCacheCountRemaining; i++){ // make just enough request to exceed `proxyCache.options.memGiBThreshold`
+                requestArr.push(request.getAsync('http://localhost:8181/randomData?sequence='+i, {})); // 268435456 Bytes (0.25 GiB) divided by 16
+            }
+
+            Promise.all(requestArr)
+                .then(function(res){
+                    lastCacheCount = _.size(proxyCache.cacheCollection);
+                    console.log("Memory usage after requests: %s GiB",process.memoryUsage().rss / 1073741824);
+                    console.log("Calling memory check");
+                    proxyCache.checkMemory(); // invoke this manually
+                    if(global.gc){
+                        global.gc();
+                        console.log("Memory usage after GC: %s GiB",process.memoryUsage().rss / 1073741824);
+                    }
+                    expect(_.size(proxyCache.cacheCollection)).to.not.equal(lastCacheCount);
+                    done();
+                });
+        });
+
+        it("freeMemory() should remove just enough cache items to meet requested memory to free)", function(done){
+            var requestArr = [],
+                lastCacheCount = 0,
+                expectedCacheCountRemaining = 1;
+
+            console.log("Memory usage before requests: %s GiB",process.memoryUsage().rss / 1073741824);
+
+            for(var i=0; i < (memGiBThreshold * 1024 * 1024 * 1024 / randomDataSizeBytes) + expectedCacheCountRemaining; i++){ // make just enough request to exceed `proxyCache.options.memGiBThreshold`
+                requestArr.push(request.getAsync('http://localhost:8181/randomData?sequence='+i, {}));
+            }
+
+            Promise.all(requestArr)
+                .then(function(res){
+                    lastCacheCount = _.size(proxyCache.cacheCollection);
+                    console.log("Memory usage after requests: %s GiB",process.memoryUsage().rss / 1073741824);
+                    console.log("Calling freeMemory");
+                    proxyCache.freeMemory(memGiBThreshold * 1024 * 1024 * 1024); // should free up memGiBThreshold / randomDataSizeBytes worth of cache objects
+                    if(global.gc){
+                        global.gc();
+                        console.log("Memory usage after GC: %s GiB",process.memoryUsage().rss / 1073741824);
+                    }
+                    expect(_.size(proxyCache.cacheCollection)).to.equal(expectedCacheCountRemaining);
+                    done();
+                });
+        });
+
+        it("should invoke checkMemory at set intervals and free up cache items when memory threshold is exceeded)", function(done){
+            var requestArr = [],
+                lastCacheCount = 0,
+                expectedCacheCountRemaining = 1,
+                numberOfRequests = (memGiBThreshold * 1024 * 1024 * 1024 / randomDataSizeBytes) + expectedCacheCountRemaining,
+                memCheckIntervalMs = numberOfRequests * 1500; // assuming 1 request takes about 1.5seconds to complete
+
+            resetProxyCache({
+                Adapter: Adapter,
+                targetHost: "localhost:8801",
+                memGiBThreshold: memGiBThreshold,
+                memCheckIntervalMs: memCheckIntervalMs
+            }, function(){
+                console.log("Memory usage before requests: %s GiB",process.memoryUsage().rss / 1073741824);
+
+                for(var i=0; i < numberOfRequests; i++){ // make just enough request to exceed `proxyCache.options.memGiBThreshold`
+                    requestArr.push(request.getAsync('http://localhost:8181/randomData?sequence='+i, {})
+                        .then(function(res){
+                            lastCacheCount = _.size(proxyCache.cacheCollection); // update the last cache count immediately
+                        }));
+                }
+
+                Promise.all(requestArr)
+                    .then(function(res){
+                        // Wait for the memory check to happen and clear up cache objects
+                        setTimeout(function(){
+                            console.log("Memory usage after requests: %s GiB",process.memoryUsage().rss / 1073741824);
+                            expect(_.size(proxyCache.cacheCollection)).to.be.lt(lastCacheCount); // some cache objects should be deleted by now
+                            done();
+                        }, memCheckIntervalMs / 2); // buffer in some extra wait time for the memory check interval
+                    });
+            });
+
         });
     });
 });
