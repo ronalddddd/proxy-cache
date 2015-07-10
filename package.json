@@ -1,7 +1,7 @@
 {
   "name": "rn-proxy-cache",
-  "version": "0.6.4",
-  "description": "An express middleware compatible proxy cache with an extensible cache adapter interface. Comes with a TTL and MongoDB adapters.",
+  "version": "0.6.5",
+  "description": "Programmable reverse caching proxy. Use as a stand-alone app or an express middleware. Comes with TTL and MongoDB adapters.",
   "main": "index.js",
   "scripts": {
     "test": "./node_modules/mocha/bin/mocha; npm_config_mongodb_url=mongodb://127.0.0.1:27017/test npm_config_use_external_cache=yes ./node_modules/mocha/bin/mocha;",

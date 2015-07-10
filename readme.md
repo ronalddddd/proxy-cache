@@ -1,6 +1,6 @@
 # Proxy Cache
 
-An express middleware compatible proxy cache with an extensible cache adapter interface. Comes with a TTL and MongoDB adapters.
+Programmable reverse caching proxy. Use as a stand-alone app or an express middleware. Comes with TTL and MongoDB adapters.
 
 # Install
 

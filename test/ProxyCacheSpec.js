@@ -266,12 +266,16 @@ describe("ProxyCache.js", function () {
                                 return request.getAsync(url, {});
                             });
                     })
-                    .then(function(res4){
-                        expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
-                        expect(proxyCache.cacheCollection[expectedCacheKey].stale).to.exist.and.equal(false);
-                        expect(proxyCache.cacheCollection[expectedCacheKey].data).to.exist.and.not.equal(prevData); // confirm that we've been served the staled cache first
-                        expect(proxyCache.cacheCollection[expectedCacheKey].statusCode).to.exist.and.lte(200);
-                        console.log(proxyCache.cacheCollection[expectedCacheKey].data);
+                    .spread(function(res4, body){
+                        var co = proxyCache.cacheCollection[expectedCacheKey];
+                        expect(co).to.exist;
+                        expect(co.stale).to.exist.and.equal(false);
+                        expect(co.data).to.exist.and.not.equal(prevData); // confirm that cache data has been updated
+                        expect(co.statusCode).to.exist.and.lte(200); // "OK" status code should be set
+                        expect(co.dateISOString).to.exist; // cache date should be set
+                        expect(co.lastUpdated).to.exist; // last updated date should be set
+                        expect(res4.headers["x-cache-updated"]).to.exist; // last updated date header should be set
+                        console.log(co.data);
                         done();
                     })
                     .catch(function(err){
