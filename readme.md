@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/ronalddddd/proxy-cache.svg?branch=master)](https://travis-ci.org/ronalddddd/proxy-cache)
+
 # Proxy Cache
 
 Programmable reverse caching proxy. Use as a stand-alone app or an express middleware. Comes with TTL and MongoDB adapters.
@@ -117,11 +119,3 @@ Pull requests are welcome :)
 - Support [ETag](https://en.wikipedia.org/wiki/HTTP_ETag) for browsers and [Vary](https://www.fastly.com/blog/best-practices-for-using-the-vary-header/) for upstream response variations. See [RFC2616](https://www.ietf.org/rfc/rfc2616.txt) for more.
 - Dockerfile, systemd unitfile templates, and other proc management files
 - How to handle very large response bodies?
-
-# Build statuses
-
-## master
-[![Build Status](https://travis-ci.org/ronalddddd/proxy-cache.svg?branch=master)](https://travis-ci.org/ronalddddd/proxy-cache)
-
-## develop
-[![Build Status](https://travis-ci.org/ronalddddd/proxy-cache.svg?branch=develop)](https://travis-ci.org/ronalddddd/proxy-cache)
