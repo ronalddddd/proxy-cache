@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/ronalddddd/proxy-cache.svg?branch=master)](https://travis-ci.org/ronalddddd/proxy-cache)
-
+[![Code Climate](https://codeclimate.com/github/ronalddddd/proxy-cache/badges/gpa.svg)](https://codeclimate.com/github/ronalddddd/proxy-cache)
 # Proxy Cache
 
 Programmable reverse caching proxy. Use as a stand-alone app or an express middleware. Comes with TTL and MongoDB adapters.
