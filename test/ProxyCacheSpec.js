@@ -356,7 +356,7 @@ describe("ProxyCache.js", function () {
         });
 
         it("should invoke checkMemory at set intervals and free up cache items when memory threshold is exceeded)", function(done){
-            this.timeout(35000);
+            this.timeout(45000);
             var requestArr = [],
                 lastCacheCount = 0,
                 expectedCacheCountRemaining = 1,
@@ -385,7 +385,7 @@ describe("ProxyCache.js", function () {
                             console.log("Memory usage after requests: %s GiB",process.memoryUsage().rss / 1073741824);
                             expect(_.size(proxyCache.cacheCollection)).to.be.lt(lastCacheCount); // some cache objects should be deleted by now
                             done();
-                        }, memCheckIntervalMs / 2); // buffer in some extra wait time for the memory check interval
+                        }, memCheckIntervalMs * 0.7); // guessing wait time for the memory check interval
                     });
             });
 
