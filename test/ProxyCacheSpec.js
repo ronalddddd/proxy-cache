@@ -302,6 +302,7 @@ describe("ProxyCache.js", function () {
         });
 
         it("checkMemory() should invoke freeMemory() if threshold is reached (memGiBThreshold is set at "+memGiBThreshold+" for this test)", function(done){
+            this.timeout(35000);
             var requestArr = [],
                 lastCacheCount = 0,
                 expectedCacheCountRemaining = 1;
@@ -328,6 +329,7 @@ describe("ProxyCache.js", function () {
         });
 
         it("freeMemory() should remove just enough cache items to meet requested memory to free)", function(done){
+            this.timeout(35000);
             var requestArr = [],
                 lastCacheCount = 0,
                 expectedCacheCountRemaining = 1;
@@ -354,6 +356,7 @@ describe("ProxyCache.js", function () {
         });
 
         it("should invoke checkMemory at set intervals and free up cache items when memory threshold is exceeded)", function(done){
+            this.timeout(35000);
             var requestArr = [],
                 lastCacheCount = 0,
                 expectedCacheCountRemaining = 1,
