@@ -119,3 +119,4 @@ Pull requests are welcome :)
 - Support [ETag](https://en.wikipedia.org/wiki/HTTP_ETag) for browsers and [Vary](https://www.fastly.com/blog/best-practices-for-using-the-vary-header/) for upstream response variations. See [RFC2616](https://www.ietf.org/rfc/rfc2616.txt) for more.
 - Dockerfile, systemd unitfile templates, and other proc management files
 - How to handle very large response bodies?
+- Avoid double compression?
