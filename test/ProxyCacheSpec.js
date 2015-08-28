@@ -27,6 +27,7 @@ describe("ProxyCache.js", function () {
         var proxyCache,
             proxyCacheServer,
             timeout = 0,
+            prevStatus = 200,
             target = http.createServer(function(req, res){
                 console.log(req.url, req.headers);
                 switch(req.url){
@@ -54,6 +55,11 @@ describe("ProxyCache.js", function () {
                     case '/code500':
                         res.statusCode = 500;
                         res.end('');
+                        break;
+                    case '/200then500':
+                        res.statusCode = prevStatus;
+                        prevStatus = (prevStatus === 200)? 500 : 200;
+                        res.end('200then500');
                         break;
                     case '/delay':
                         setTimeout(function(){res.end('delayed')}, 1000);
@@ -389,6 +395,82 @@ describe("ProxyCache.js", function () {
                     });
             });
 
+        });
+
+        // TODO: FINISH THIS and then make it pass!
+        it("should delete cache object if the request response in updateCacheObject() has an error code greate than 200", function(done){
+            var prevData,
+                url = 'http://localhost:8181/200then500',
+                expectedCacheKey = "not_phone:localhost:8181:/200then500";
+            timeout = 0;
+
+            if (proxyCacheServer) {
+                proxyCacheServer.close();
+            }
+
+            proxyCache = new ProxyCache({
+                Adapter: Adapter,
+                targetHost: "localhost:8801",
+                ignoreRegex: undefined,
+                allowStaleCache: true
+            });
+
+            proxyCache.ready.then(function(){
+                proxyCacheServer = http.createServer(function (req, res) {
+                    proxyCache.handleRequest(req, res);
+                }).listen(8181);
+
+                request.getAsync({
+                    url: url,
+                    headers: {foo: "bar"}
+                })
+                    .then(function(res){
+                        return request.getAsync(url, {}); // create the cache entry
+                    })
+                    .then(function(res2){
+                        var co = proxyCache.cacheCollection[expectedCacheKey];
+                        expect(co).to.exist;
+                        expect(co.hits).to.equal(1);
+                        proxyCache.clearAll();
+                        expect(co.stale).to.exist.and.equal(true);
+                        expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
+                        console.log(proxyCache.cacheCollection[expectedCacheKey].data);
+
+                        prevData = co.data;
+
+                        console.log("Triggering update.");
+                        return request.getAsync(url, {}); // trigger the update
+                    })
+                    .then(function(res3){
+                        expect(proxyCache.cacheCollection[expectedCacheKey]).to.exist;
+                        expect(proxyCache.cacheCollection[expectedCacheKey].stale).to.exist.and.equal(true);
+                        expect(proxyCache.cacheCollection[expectedCacheKey].data).to.exist.and.equal(prevData); // confirm that we've been served the staled cache first
+                        console.log(proxyCache.cacheCollection[expectedCacheKey].data);
+
+                        expect(proxyCache.cacheCollection[expectedCacheKey]._updatePromise).to.exist;
+                        return proxyCache.cacheCollection[expectedCacheKey]._updatePromise
+                            .then(function(res){
+                                console.log("Cache should be done updating.");
+                                // Make the request again and check if the cache has been updated
+                                return request.getAsync(url, {}); // second call to this should make return status 500
+                            });
+                    })
+                    .spread(function(res4, body){
+                        var co = proxyCache.cacheCollection[expectedCacheKey];
+                        expect(co).to.exist;
+                        expect(co.stale).to.exist.and.equal(false);
+                        expect(co.data).to.exist.and.not.equal(prevData); // confirm that cache data has been updated
+                        expect(co.statusCode).to.exist.and.lte(200); // "OK" status code should be set
+                        expect(co.dateISOString).to.exist; // cache date should be set
+                        expect(co.lastUpdated).to.exist; // last updated date should be set
+                        expect(res4.headers["x-cache-updated"]).to.exist; // last updated date header should be set
+                        console.log(co.data);
+                        done();
+                    })
+                    .catch(function(err){
+                        done(err);
+                    });
+            });
         });
     });
 });
