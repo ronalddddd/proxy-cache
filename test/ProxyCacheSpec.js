@@ -397,8 +397,7 @@ describe("ProxyCache.js", function () {
 
         });
 
-        // TODO: FINISH THIS and then make it pass!
-        it("should delete cache object if the request response in updateCacheObject() has an error code greate than 200", function(done){
+        it("should delete cache object if the request response in updateCacheObject() has a response code greater than 200", function(done){
             var prevData,
                 url = 'http://localhost:8181/200then500',
                 expectedCacheKey = "not_phone:localhost:8181:/200then500";
@@ -449,21 +448,19 @@ describe("ProxyCache.js", function () {
 
                         expect(proxyCache.cacheCollection[expectedCacheKey]._updatePromise).to.exist;
                         return proxyCache.cacheCollection[expectedCacheKey]._updatePromise
-                            .then(function(res){
-                                console.log("Cache should be done updating.");
-                                // Make the request again and check if the cache has been updated
-                                return request.getAsync(url, {}); // second call to this should make return status 500
+                            .catch(function(res){ // expect the update to fail because of the 500 status code
+                                console.log("Expected failure for cache update.");
+                                return request.getAsync(url, {}); // make another request, which should return 200
                             });
                     })
                     .spread(function(res4, body){
                         var co = proxyCache.cacheCollection[expectedCacheKey];
                         expect(co).to.exist;
-                        expect(co.stale).to.exist.and.equal(false);
-                        expect(co.data).to.exist.and.not.equal(prevData); // confirm that cache data has been updated
+                        expect(co.stale).to.not.exist;
                         expect(co.statusCode).to.exist.and.lte(200); // "OK" status code should be set
                         expect(co.dateISOString).to.exist; // cache date should be set
-                        expect(co.lastUpdated).to.exist; // last updated date should be set
-                        expect(res4.headers["x-cache-updated"]).to.exist; // last updated date header should be set
+                        expect(co.lastUpdated).to.not.exist; // last updated date should be set
+                        expect(res4.headers["x-cache-updated"]).to.not.exist; // should be a brand new cache object
                         console.log(co.data);
                         done();
                     })
