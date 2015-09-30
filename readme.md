@@ -111,12 +111,11 @@ This should be the most common case of upstream response variations. Ideally, we
 
 Pull requests are welcome :)
 
-- Write more tests
-- Add feature to regenerate cache (precache), generating the ones with the most cache hits first
-- Add option to override `ProxyCache.prototype.getCacheKey` method
-- Add option to rewrite upstream path with a generated middleware -- e.g. `app.use('/path', proxyCache.createMiddleware({rewrite: rewritePathMethod }))`
-- Add option to allow use of middleware response as upstream (instead of proxying with http-proxy)
-- Support [ETag](https://en.wikipedia.org/wiki/HTTP_ETag) for browsers and [Vary](https://www.fastly.com/blog/best-practices-for-using-the-vary-header/) for upstream response variations. See [RFC2616](https://www.ietf.org/rfc/rfc2616.txt) for more.
-- Dockerfile, systemd unitfile templates, and other proc management files
-- How to handle very large response bodies?
-- Avoid double compression?
+- [ ] Expose ProxyCache instance in express routes -- `http.ClientRequest#proxyCache`
+- [ ] Express middleware API, e.g. `proxyCache.createMiddleware(app, /\/api\/.*/, { targetProtocol: 'https', targetHost: 'localhost:8081', rewriteUrl: rewriteUrlMethod })`
+- [ ] When `targetHost` is not provided, set upstream to the local response stream (aka `http.ServerResponse` object in the express route), instead of the proxy response generate with http-proxy
+- [ ] Support [ETag](https://en.wikipedia.org/wiki/HTTP_ETag) for browsers and [Vary](https://www.fastly.com/blog/best-practices-for-using-the-vary-header/) for upstream response variations. See [RFC2616](https://www.ietf.org/rfc/rfc2616.txt) for more.
+- [ ] Dockerfile, systemd unitfile templates, and other proc management files
+- [ ] Add feature to regenerate cache (precache), generating the ones with the most cache hits first
+- [ ] Add option to override `ProxyCache.prototype.getCacheKey` method
+- [ ] Handle very large responses?

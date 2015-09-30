@@ -469,5 +469,34 @@ describe("ProxyCache.js", function () {
                     });
             });
         });
+
+        it("clearAll(keyRegex) should only clear regex matching cache objects when regex is given", function(done){ // try to fool the server to cache a mobile site and serve it to desktop
+            this.timeout(45000);
+            var requests = [],
+                context = this;
+
+            requests.push(request.getAsync('http://localhost:8181/delay', {}));
+            requests.push(request.getAsync('http://localhost:8181/hello', {}));
+            Promise.all(requests)
+                .then(function(res){
+                    context.res = res;
+                    proxyCache.clearAll(/.*\/hello/);
+                    return new Promise(function(resolve, reject){
+                       setTimeout(function(){ // wait for clearAll to finish clearing external cache, which is async.
+                           resolve(this.res);
+                       }.bind(context), 3000);
+                    });
+                })
+                .then(function(res){
+                    var coDelay = proxyCache.cacheCollection["not_phone:localhost:8181:/delay"];
+                    var coHello = proxyCache.cacheCollection["not_phone:localhost:8181:/hello"];
+                    expect(coDelay).to.exist;
+                    expect(coHello).not.to.exist;
+                    done();
+                })
+                .catch(function(err){
+                    done(err);
+                });
+        });
     });
 });

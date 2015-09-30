@@ -1,6 +1,6 @@
 {
   "name": "rn-proxy-cache",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "description": "Programmable reverse caching proxy. Use as a stand-alone app or an express middleware. Comes with TTL and MongoDB adapters.",
   "main": "index.js",
   "scripts": {
