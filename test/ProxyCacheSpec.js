@@ -14,7 +14,8 @@ var expect = require('chai').expect,
     Adapter = require(selectedAdapter);
 
 var memGiBThreshold = 0.25,
-    randomDataSizeBytes = memGiBThreshold *1024*1024*1024 / 16;
+    randomDataSizeBytes = memGiBThreshold *1024*1024*1024 / 16,
+    ignoreList = [];
 
 process.env.npm_config_verbose_log = true;
 
@@ -67,6 +68,11 @@ describe("ProxyCache.js", function () {
                     default:
                         if (req.url.indexOf("/randomData") == 0){
                             res.end(crypto.randomBytes(randomDataSizeBytes)); // 268435456 Bytes (0.25 GiB) divided by 16
+                        } else if (req.url.indexOf("/echo") == 0){
+                            var message = req.url.split('/');
+
+                            message = (message.length > 2)? message[2] : "NO MESSAGE";
+                            res.end(message);
                         } else {
                             throw new Error("UNEXPECTED URL");
                         }
@@ -95,8 +101,14 @@ describe("ProxyCache.js", function () {
                 Adapter: Adapter,
                 targetHost: "localhost:8801",
                 memGiBThreshold: memGiBThreshold,
-                memCheckIntervalMs: 0
+                memCheckIntervalMs: 0,
+                ignoreList: ignoreList
             }, ready);
+        });
+
+        afterEach(function(done){
+            ignoreList = [];
+            done();
         });
 
         it("should not cache an empty response", function(done){
@@ -482,9 +494,9 @@ describe("ProxyCache.js", function () {
                     context.res = res;
                     proxyCache.clearAll(/.*\/hello/);
                     return new Promise(function(resolve, reject){
-                       setTimeout(function(){ // wait for clearAll to finish clearing external cache, which is async.
-                           resolve(this.res);
-                       }.bind(context), 3000);
+                        setTimeout(function(){ // wait for clearAll to finish clearing external cache, which is async.
+                            resolve(this.res);
+                        }.bind(context), 3000);
                     });
                 })
                 .then(function(res){
@@ -497,6 +509,43 @@ describe("ProxyCache.js", function () {
                 .catch(function(err){
                     done(err);
                 });
+        });
+
+        it("should not cache routes specified in the ProxyCache#ignoreList", function(done){
+            this.timeout(5000);
+            var requests = [],
+                context = this,
+                reset = new Promise(function(resolve, reject){
+                    resetProxyCache({
+                        Adapter: Adapter,
+                        targetHost: "localhost:8801",
+                        memGiBThreshold: memGiBThreshold,
+                        memCheckIntervalMs: 0,
+                        ignoreList: [/\/echo\/?$/]
+                    }, function (){
+                        resolve();
+                    }.bind(this));
+                });
+
+            reset.then(function(){
+                console.log('ignoreList: ', proxyCache.ignoreList);
+                requests.push(request.getAsync('http://localhost:8181/echo', {}));
+                requests.push(request.getAsync('http://localhost:8181/echo/', {}));
+                requests.push(request.getAsync('http://localhost:8181/echo/foo', {}));
+                Promise.all(requests)
+                    .then(function(res){
+                        var coEcho1 = proxyCache.cacheCollection["not_phone:localhost:8181:/echo"];
+                        var coEcho2 = proxyCache.cacheCollection["not_phone:localhost:8181:/echo/"];
+                        var coEcho3 = proxyCache.cacheCollection["not_phone:localhost:8181:/echo/foo"];
+                        expect(coEcho1).not.to.exist;
+                        expect(coEcho2).not.to.exist;
+                        expect(coEcho3).to.exist;
+                        done();
+                    })
+                    .catch(function(err){
+                        done(err);
+                    });
+            });
         });
     });
 });
