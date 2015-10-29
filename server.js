@@ -9,11 +9,14 @@ var ProxyCache = require('./lib/ProxyCache'),
     spoofHostHeader = (process.env.npm_config_spoof_host_header !== undefined),
     staleCaching = (process.env.npm_config_stale_caching !== undefined),
     ignorePattern = process.env.npm_config_ignore_pattern,
+    ignorePatternArray = ignorePattern.split(',');
     ignoreList = [],
     app = express();
 
 if (ignorePattern){
-    ignoreList.push(new RegExp(ignorePattern));
+    ignorePatternArray.forEach(function(ignorePatternString) {
+        ignoreList.push(new RegExp(ignorePatternString));
+    })
     console.log('Using ignore list:', ignoreList);
 }
 
