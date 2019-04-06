@@ -1,4 +1,3 @@
-"use strict";
 var expect = require('chai').expect,
     ProxyCache = require('../lib/ProxyCache'),
     adapter = require('../lib/adapters/proxy-cache-ttl'),
