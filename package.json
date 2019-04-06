@@ -15,7 +15,7 @@
     "connect": "^3.3.5",
     "express": "^4.13.1",
     "http-proxy": "^1.11.1",
-    "lodash": "^3.10.0",
+    "lodash": ">=4.17.11",
     "mobile-detect": "0.4.3",
     "mongodb": "^2.0.33",
     "request": "^2.58.0"
